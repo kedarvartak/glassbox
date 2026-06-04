@@ -1,0 +1,22 @@
+{
+  "name": "@glassbox/adapter-claude-code",
+  "version": "0.0.0",
+  "description": "Adapter: reads Claude Code session transcripts (~/.claude/projects/**/*.jsonl) into the normalized model. Isolated and pure — Claude-specific parsing never leaks past this package.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["dist", "src"],
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "tsc --build --clean"
+  },
+  "dependencies": {
+    "@glassbox/core": "workspace:*"
+  }
+}

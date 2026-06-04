@@ -1,0 +1,27 @@
+{
+  "name": "@glassbox/cli",
+  "version": "0.0.0",
+  "description": "The `glassbox` command — discovers sessions and runs analyzers from the terminal. The first surface; the local web UI comes in Phase 2.",
+  "type": "module",
+  "bin": {
+    "glassbox": "./dist/main.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["dist", "src"],
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "tsc --build --clean"
+  },
+  "dependencies": {
+    "@glassbox/adapter-claude-code": "workspace:*",
+    "@glassbox/analysis": "workspace:*",
+    "@glassbox/core": "workspace:*"
+  }
+}

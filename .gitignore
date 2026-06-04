@@ -1,0 +1,11 @@
+node_modules/
+dist/
+*.tsbuildinfo
+.DS_Store
+coverage/
+*.log
+
+# local scratch / fixtures captured from a real machine (never commit raw sessions)
+fixtures/local/
+.env
+.env.*

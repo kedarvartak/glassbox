@@ -1,0 +1,22 @@
+{
+  "name": "@glassbox/analysis",
+  "version": "0.0.0",
+  "description": "The detectors: turns a normalized Session/ContextSnapshot into hygiene findings — reclaimable tokens, dead references, stale memory. Pure analysis over the model; reads the repo only through the RepoState port.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["dist", "src"],
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "tsc --build --clean"
+  },
+  "dependencies": {
+    "@glassbox/core": "workspace:*"
+  }
+}

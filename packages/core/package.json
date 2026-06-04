@@ -1,0 +1,19 @@
+{
+  "name": "@glassbox/core",
+  "version": "0.0.0",
+  "description": "The spine: the normalized event/context model + the Adapter contract. Pure types, zero runtime dependencies — everything else in Glassbox depends on this and nothing depends back.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["dist", "src"],
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "tsc --build --clean"
+  }
+}
