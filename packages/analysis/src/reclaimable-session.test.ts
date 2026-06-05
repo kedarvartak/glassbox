@@ -17,7 +17,8 @@ const tokens: TokenCounter = { count: (t) => Math.ceil(t.length / 4) };
 const repoAllExist: RepoState = {
   exists: async () => true,
   read: async () => null,
-  modifiedAt: async () => null,
+  // Return epoch (0) — file exists, not drifted (well before any test timestamp).
+  modifiedAt: async () => 0,
 };
 
 function read(
@@ -39,12 +40,12 @@ function read(
   };
 }
 
-function assistant(id: string): Message {
+function assistant(id: string, timestamp?: string): Message {
   return {
     id: asMessageId(id),
     parentId: null,
     role: "assistant",
-    timestamp: asIsoTimestamp("2026-06-04T00:00:00Z"),
+    timestamp: asIsoTimestamp(timestamp ?? "2026-06-04T00:00:00Z"),
     blocks: [],
     isSidechain: false,
   };
@@ -99,7 +100,8 @@ describe("analyzeSessionReclaimable — stale (superseded file versions)", () =>
     const repo: RepoState = {
       exists: async (p) => p !== "/repo/deleted.ts",
       read: async () => null,
-      modifiedAt: async () => null,
+      // null = gone for deleted.ts; epoch = exists+no-drift for others.
+      modifiedAt: async (p) => (p === "/repo/deleted.ts" ? null : 0),
     };
 
     const { report } = await analyzeSessionReclaimable(session, { repo, tokens });
@@ -120,6 +122,48 @@ describe("analyzeSessionReclaimable — stale (superseded file versions)", () =>
     expect(report.byStatus.duplicate).toBe(100);
     expect(report.byStatus.stale).toBe(0);
     expect(report.items[0]?.status).toBe("duplicate");
+  });
+});
+
+describe("analyzeSessionReclaimable — stale (disk-drift)", () => {
+  it("flags a file segment as stale when disk mtime is >3 s after capture", async () => {
+    // The segment was captured at T+1 s; the file was modified at T+10 s on disk.
+    const captureTime = "2026-06-04T00:00:01Z";
+    const driftTime = new Date("2026-06-04T00:00:10Z").getTime(); // 9 s later
+
+    const session: Session = {
+      ...sessionOf([read("/repo/app.ts", 100, "t1", "a1", 1)]),
+      messages: [assistant("a1", captureTime)],
+    };
+    const repo: RepoState = {
+      exists: async () => true,
+      read: async () => null,
+      modifiedAt: async (p) => (p === "/repo/app.ts" ? driftTime : null),
+    };
+
+    const { report } = await analyzeSessionReclaimable(session, { repo, tokens });
+    expect(report.byStatus.stale).toBe(100);
+    expect(report.items[0]?.reason).toContain("modified on disk");
+  });
+
+  it("does not flag a file modified within the 3 s grace window", async () => {
+    const captureTime = "2026-06-04T00:00:01Z";
+    // Only 2 s after capture — within the 3-second grace period.
+    const withinGrace = new Date("2026-06-04T00:00:03Z").getTime();
+
+    const session: Session = {
+      ...sessionOf([read("/repo/app.ts", 100, "t1", "a1", 1)]),
+      messages: [assistant("a1", captureTime)],
+    };
+    const repo: RepoState = {
+      exists: async () => true,
+      read: async () => null,
+      modifiedAt: async () => withinGrace,
+    };
+
+    const { report } = await analyzeSessionReclaimable(session, { repo, tokens });
+    expect(report.byStatus.stale).toBe(0);
+    expect(report.reclaimableTokens).toBe(0);
   });
 });
 

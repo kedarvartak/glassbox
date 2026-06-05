@@ -44,7 +44,7 @@ describe("parseClaudeSession", () => {
   });
 
   it("keeps every tree event as a message and preserves uuid/parent lineage", () => {
-    expect(session.messages).toHaveLength(15); // metadata + the malformed line excluded
+    expect(session.messages).toHaveLength(16); // 15 original + compact1; metadata + malformed excluded
     const byId = new Map(session.messages.map((m) => [m.id, m]));
     expect(byId.get("u1")?.parentId).toBeNull();
     expect(byId.get("as1")?.parentId).toBe("a1");
@@ -53,7 +53,7 @@ describe("parseClaudeSession", () => {
 
   it("degrades gracefully on a malformed line", () => {
     expect(session.warnings).toHaveLength(1);
-    expect(session.warnings[0]).toMatch(/line 18/);
+    expect(session.warnings[0]).toMatch(/line 19/); // compact1 added one line before the broken line
   });
 
   it("dedupes usage across the multi-line assistant response (token math is sacred)", () => {
@@ -117,8 +117,17 @@ describe("parseClaudeSession", () => {
     expect(session.memoryOps.every((m) => m.confidence === "inferred")).toBe(true);
   });
 
-  it("finds no compaction events (none are emitted by Claude Code yet)", () => {
-    expect(session.compactions).toEqual([]);
+  it("detects an away_summary compaction event and populates tokens before/after", () => {
+    expect(session.compactions).toHaveLength(1);
+    const c = session.compactions[0];
+    expect(c?.id).toBe("compact1");
+    expect(c?.summary).toContain("greet()");
+    // tokensBefore: last assistant usage before compact1 = M3: 1 + 1100 = 1101
+    expect(c?.tokensBefore).toBe(1101);
+    // tokensAfter: no assistant message after compact1 in this fixture
+    expect(c?.tokensAfter).toBe(0);
+    // evictedMessageIds = all messages before compact1 (u1 through sys1)
+    expect(c?.evictedMessageIds).toHaveLength(14);
   });
 
   it("matches the golden normalized model", () => {

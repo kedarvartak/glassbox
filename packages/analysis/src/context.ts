@@ -107,6 +107,8 @@ export function reconstructContext(session: Session, opts: ReconstructOptions): 
 
   // 3. Non-file tool output — spent one-shot results (doc 20 Type #3). File
   //    tools' output is already counted as file content above, so skip them.
+  //    MCP tools (name starts with "mcp__") get their own source so the x-ray
+  //    can show MCP envelope usage separately from native tool results.
   const fileToolCallIds = new Set<ToolCallId>(session.fileOps.map((op) => op.toolCallId));
   for (const call of session.toolCalls) {
     if (call.resultText === null || call.resultTokens === null) continue;
@@ -114,7 +116,7 @@ export function reconstructContext(session: Session, opts: ReconstructOptions): 
     const enteredAt = call.resolvedInMessageId ?? call.requestedInMessageId;
     if (!inWindow.has(enteredAt)) continue;
     add({
-      source: "tool_result",
+      source: call.name.startsWith("mcp__") ? "mcp" : "tool_result",
       label: `${call.name} result`,
       sizeTokens: call.resultTokens,
       originMessageId: enteredAt,

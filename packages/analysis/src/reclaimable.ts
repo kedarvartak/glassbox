@@ -1,5 +1,6 @@
 import type {
   ContextSnapshot,
+  Message,
   MessageId,
   ModelPricing,
   RepoState,
@@ -100,10 +101,10 @@ export async function analyzeSessionReclaimable(
 }
 
 /**
- * Read-only/inspection tools whose output is inherently one-shot — useful for
- * the turn that ran them, dead weight afterward (doc 20 Type #3). Conservative
- * by design: only well-known transient tools, so we never call an output the
- * agent is actively working with "spent".
+ * Tool names whose output is inherently one-shot: useful for the turn that ran
+ * them, dead weight afterward (doc 20 Type #3). Conservative by design — only
+ * tools whose results are never semantically referenced again after the turn.
+ * MCP tools (detected by the "mcp__" prefix) are handled separately below.
  */
 const ONE_SHOT_TOOLS = new Set([
   "Bash",
@@ -114,6 +115,9 @@ const ONE_SHOT_TOOLS = new Set([
   "WebFetch",
   "WebSearch",
   "NotebookRead",
+  "TodoRead",   // reads the current todo list — ephemeral state snapshot
+  "TodoWrite",  // confirmation text is never referenced again
+  "Task",       // subagent spawn — result is the output, used once
 ]);
 
 /**
@@ -157,6 +161,7 @@ async function classifySessionSegments(
   const superseded = supersededFileSegments(session, snapshot);
   const lastTurn = session.turns[session.turns.length - 1];
   const lastTurnIds = new Set<MessageId>(lastTurn ? lastTurn.messageIds : []);
+  const msgById = new Map<MessageId, Message>(session.messages.map((m) => [m.id, m]));
 
   const verdicts = new Map<SegmentId, Verdict>();
   for (const seg of snapshot.segments) {
@@ -170,15 +175,32 @@ async function classifySessionSegments(
       continue;
     }
     if (seg.path) {
-      verdicts.set(seg.id, await classifySegment(seg, repo));
+      // Single modifiedAt call answers both existence (null = gone) and drift.
+      const modTs = await repo.modifiedAt(seg.path);
+      if (modTs === null) {
+        verdicts.set(seg.id, { status: "gone", reason: `file no longer exists: ${seg.path}` });
+      } else {
+        const originMsg = msgById.get(seg.originMessageId);
+        const capturedMs = originMsg ? new Date(originMsg.timestamp).getTime() : null;
+        // 3 s grace prevents false positives when mtime ≈ write/edit timestamp.
+        if (capturedMs !== null && modTs > capturedMs + 3_000) {
+          verdicts.set(seg.id, { status: "stale", reason: `file was modified on disk after this copy was captured` });
+        } else {
+          verdicts.set(seg.id, { status: "live", reason: "no reclaimable signal" });
+        }
+      }
       continue;
     }
-    if (seg.source === "tool_result" && lastTurn && !lastTurnIds.has(seg.originMessageId)) {
+    // MCP tool results are also one-shot by nature (envelope + ephemeral data).
+    const isMcp = seg.source === "mcp";
+    if ((seg.source === "tool_result" || isMcp) && lastTurn && !lastTurnIds.has(seg.originMessageId)) {
       const name = seg.originToolCallId === undefined ? undefined : nameByCall.get(seg.originToolCallId);
-      if (name && ONE_SHOT_TOOLS.has(name)) {
+      if (isMcp || (name && ONE_SHOT_TOOLS.has(name))) {
         verdicts.set(seg.id, {
           status: "spent",
-          reason: `one-shot ${name} output from an earlier turn — typically dead weight after use`,
+          reason: isMcp
+            ? `MCP tool output from an earlier turn — envelope + ephemeral data, not needed after use`
+            : `one-shot ${name} output from an earlier turn — typically dead weight after use`,
         });
         continue;
       }

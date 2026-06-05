@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import type {
+  CompactionEvent,
   ContentBlock,
   FileOp,
   FileOpKind,
@@ -26,6 +27,7 @@ import {
   type RawBlock,
   type RawEvent,
   type RawMessageEvent,
+  type RawSystemEvent,
   type RawToolResultPart,
   type RawTreeFields,
   type RawUsage,
@@ -66,6 +68,7 @@ export function parseClaudeSession(
   const pendingUses: PendingUse[] = [];
   const results = new Map<string, PendingResult>();
   const seenUsageMsgIds = new Set<string>();
+  const compactionHints: CompactionHint[] = [];
 
   const meta: SessionMeta = {};
   let minTs: string | undefined;
@@ -73,6 +76,18 @@ export function parseClaudeSession(
 
   for (const ev of events) {
     if (!isTreeEvent(ev)) continue; // metadata line (no uuid) — not a message
+
+    // Collect away_summary (compaction) events before the general message build.
+    if (ev.type === "system") {
+      const sev = ev as RawSystemEvent;
+      if (sev.subtype === "away_summary" && typeof sev.uuid === "string") {
+        compactionHints.push({
+          uuid: sev.uuid,
+          timestamp: sev.timestamp ?? "",
+          summary: sev.summary ?? sev.leafText ?? null,
+        });
+      }
+    }
     const t = ev as RawTreeFields;
     absorbMeta(meta, t);
     if (typeof t.timestamp === "string") {
@@ -125,7 +140,7 @@ export function parseClaudeSession(
     toolCalls,
     fileOps,
     memoryOps,
-    compactions: [], // no compaction marker observed in Claude Code yet (doc 19 §1)
+    compactions: buildCompactions(compactionHints, messages),
     warnings,
   };
 }
@@ -455,6 +470,72 @@ function buildTurns(messages: readonly Message[], startsTurn: readonly boolean[]
     turns.push({ index: 0, userMessageId: head.id, messageIds: messages.map((m) => m.id) });
   }
   return turns;
+}
+
+// ───────────────────────────── compaction detection ─────────────────────
+
+interface CompactionHint {
+  readonly uuid: string;
+  readonly timestamp: string;
+  readonly summary: string | null;
+}
+
+/**
+ * Convert accumulated `away_summary` hints into {@link CompactionEvent}s by
+ * correlating with surrounding assistant message usage.
+ *
+ * `tokensBefore` / `tokensAfter` are derived from the nearest assistant messages
+ * that carry `usage` (input + cache_read ≈ full window tokens sent to the API).
+ * The estimate is directional — good enough for the before/after diff the UI
+ * shows, and honest in the compaction note.
+ *
+ * `evictedMessageIds` is all messages between the previous compaction (or
+ * session start) and this one: the segment of conversation the summary replaced.
+ */
+function buildCompactions(
+  hints: readonly CompactionHint[],
+  messages: readonly Message[],
+): CompactionEvent[] {
+  if (hints.length === 0) return [];
+
+  const msgIdx = new Map<MessageId, number>(messages.map((m, i) => [m.id, i]));
+
+  // ordered list of (message-index, total-tokens) for assistant messages with usage
+  const usagePoints: Array<{ idx: number; total: number }> = [];
+  messages.forEach((m, i) => {
+    if (m.usage) {
+      const total = (m.usage.inputTokens ?? 0) + (m.usage.cacheReadTokens ?? 0);
+      if (total > 0) usagePoints.push({ idx: i, total });
+    }
+  });
+
+  const events: CompactionEvent[] = [];
+  for (let h = 0; h < hints.length; h++) {
+    const hint = hints[h] as CompactionHint;
+    const compactIdx = msgIdx.get(asMessageId(hint.uuid));
+    if (compactIdx === undefined) continue;
+
+    const tokensBefore = [...usagePoints].reverse().find((u) => u.idx < compactIdx)?.total ?? 0;
+    const tokensAfter = usagePoints.find((u) => u.idx > compactIdx)?.total ?? 0;
+
+    // Evicted = messages since the previous compaction (or session start).
+    const prevCompactIdx = h > 0
+      ? (msgIdx.get(asMessageId((hints[h - 1] as CompactionHint).uuid)) ?? -1)
+      : -1;
+    const evictedMessageIds = messages
+      .slice(prevCompactIdx + 1, compactIdx)
+      .map((m) => m.id);
+
+    events.push({
+      id: asMessageId(hint.uuid),
+      timestamp: asIsoTimestamp(hint.timestamp),
+      tokensBefore,
+      tokensAfter,
+      evictedMessageIds,
+      summary: hint.summary,
+    });
+  }
+  return events;
 }
 
 // ───────────────────────────── small helpers ────────────────────────────

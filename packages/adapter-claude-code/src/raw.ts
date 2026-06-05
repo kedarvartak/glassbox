@@ -88,6 +88,10 @@ export interface RawToolResultPart {
 export interface RawSystemEvent extends RawTreeFields {
   readonly type: "system";
   readonly subtype?: string;
+  /** Compaction summary text — present on `away_summary` events. */
+  readonly summary?: string;
+  /** Alternate field name used in some Claude Code builds. */
+  readonly leafText?: string;
 }
 
 /** An `attachment` line — harness-injected context (dir snapshots, skills, …). */

@@ -2,7 +2,31 @@
 
 exports[`parseClaudeSession > matches the golden normalized model 1`] = `
 {
-  "compactions": [],
+  "compactions": [
+    {
+      "evictedMessageIds": [
+        "u1",
+        "a1",
+        "as1",
+        "as2",
+        "as3",
+        "u2",
+        "as4",
+        "u3",
+        "as5",
+        "u4",
+        "as6",
+        "u5",
+        "as7",
+        "sys1",
+      ],
+      "id": "compact1",
+      "summary": "The assistant read src/app.ts, added a greet() helper, wrote project conventions to CLAUDE.md, and read notes from memory/notes.md.",
+      "timestamp": "2026-06-04T10:00:10.000Z",
+      "tokensAfter": 0,
+      "tokensBefore": 1101,
+    },
+  ],
   "endedAt": "2026-06-04T10:00:20.000Z",
   "fileOps": [
     {
@@ -357,13 +381,39 @@ export function greet(n){return \`hi \${n}\`;}",
     {
       "blocks": [
         {
+          "kind": "unknown",
+          "raw": {
+            "cwd": "/home/dev/acme",
+            "gitBranch": "main",
+            "isSidechain": false,
+            "parentUuid": "sys1",
+            "sessionId": "sess-1",
+            "subtype": "away_summary",
+            "summary": "The assistant read src/app.ts, added a greet() helper, wrote project conventions to CLAUDE.md, and read notes from memory/notes.md.",
+            "timestamp": "2026-06-04T10:00:10.000Z",
+            "type": "system",
+            "uuid": "compact1",
+            "version": "1.2.3",
+          },
+          "rawKind": "system:away_summary",
+        },
+      ],
+      "id": "compact1",
+      "isSidechain": false,
+      "parentId": "sys1",
+      "role": "system",
+      "timestamp": "2026-06-04T10:00:10.000Z",
+    },
+    {
+      "blocks": [
+        {
           "kind": "text",
           "text": "thanks, looks good",
         },
       ],
       "id": "u6",
       "isSidechain": false,
-      "parentId": "sys1",
+      "parentId": "compact1",
       "role": "user",
       "timestamp": "2026-06-04T10:00:20.000Z",
     },
@@ -458,6 +508,7 @@ export function greet(n){return \`hi \${n}\`;}",
         "u5",
         "as7",
         "sys1",
+        "compact1",
       ],
       "userMessageId": "u1",
     },
@@ -470,7 +521,7 @@ export function greet(n){return \`hi \${n}\`;}",
     },
   ],
   "warnings": [
-    "skipped malformed JSON on line 18",
+    "skipped malformed JSON on line 19",
   ],
 }
 `;
