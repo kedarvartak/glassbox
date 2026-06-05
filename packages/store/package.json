@@ -1,0 +1,25 @@
+{
+  "name": "@glassbox/store",
+  "version": "0.0.0",
+  "description": "Local SQLite index over parsed sessions (node:sqlite, zero native deps). Fast metadata queries + incremental, watch-driven re-parse. Our own store — never touches the user's project files.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["dist", "src"],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "tsc --build --clean"
+  },
+  "dependencies": {
+    "@glassbox/core": "workspace:*"
+  }
+}

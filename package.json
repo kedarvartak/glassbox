@@ -5,7 +5,7 @@
   "description": "Observability for AI agent memory & context — a local-first, cross-tool x-ray and hygiene monitor for coding agents.",
   "type": "module",
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "packageManager": "pnpm@10.30.3",
   "scripts": {

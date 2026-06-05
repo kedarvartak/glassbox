@@ -22,6 +22,7 @@
   "dependencies": {
     "@glassbox/adapter-claude-code": "workspace:*",
     "@glassbox/analysis": "workspace:*",
-    "@glassbox/core": "workspace:*"
+    "@glassbox/core": "workspace:*",
+    "@glassbox/store": "workspace:*"
   }
 }

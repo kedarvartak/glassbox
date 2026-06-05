@@ -23,3 +23,12 @@ set at every turn), or **reconstruct** it on demand from the message stream?
 
 Deferred. Default lean: reconstruct on demand, add a cache/index only if perf
 on large sessions (doc 17 §4.4) demands it. Revisit with real session sizes.
+
+## Update (Phase 1.4, 2026-06-05)
+
+The local index (`@glassbox/store`) landed and confirms the lean path: it stores
+the **whole `Session` as a JSON blob** plus queryable metadata columns — it does
+**not** materialize per-turn `ContextSnapshot`s. Snapshots will be reconstructed
+on demand from the stored model (workstream 1.3). Re-deriving the document-store
+schema is cheap because it doesn't shred the model into tables, so this stays
+revisable if a per-turn scrubber later needs materialized snapshots for perf.

@@ -4,6 +4,7 @@
     { "path": "packages/core" },
     { "path": "packages/adapter-claude-code" },
     { "path": "packages/analysis" },
+    { "path": "packages/store" },
     { "path": "packages/cli" }
   ]
 }

@@ -17,7 +17,8 @@ data layer → analysis layer → UI.
   │ Claude Code JSONL │──┐   adapter-claude-code ─┐
   │ Codex SQLite      │──┼─►  (per-tool parsing)   ├─► core (normalized model) ─► analysis ─► cli / ui
   │ Cursor / Cline    │──┘   …future adapters    ─┘     the spine                detectors   surfaces
-  └──────────────────┘
+  └──────────────────┘                                        │
+                                              store (SQLite index: incremental + watch)
 ```
 
 ## Packages (the dependency arrow only points one way: toward `core`)
@@ -26,8 +27,9 @@ data layer → analysis layer → UI.
 |---|---|---|
 | [`@glassbox/core`](./packages/core) | The spine: normalized model + `Adapter`/`TokenCounter`/`RepoState` contracts. **Zero runtime deps.** | — |
 | [`@glassbox/adapter-claude-code`](./packages/adapter-claude-code) | Reads `~/.claude/projects/**/*.jsonl` into the model. Tool-specifics never leak out. | core |
-| [`@glassbox/analysis`](./packages/analysis) | Detectors over the model (reclaimable tokens; later: dead-refs, stale memory). | core |
-| [`@glassbox/cli`](./packages/cli) | The `glassbox` command — discover + analyze from the terminal. | core, adapter, analysis |
+| [`@glassbox/analysis`](./packages/analysis) | Detectors over the model (reclaimable tokens, cost, token-accuracy; later: dead-refs, stale memory). | core |
+| [`@glassbox/store`](./packages/store) | Local SQLite index (`node:sqlite`, no native build) over parsed sessions: fast metadata queries + incremental, watch-driven re-parse. Tool-agnostic — drives any `Adapter`. | core |
+| [`@glassbox/cli`](./packages/cli) | The `glassbox` command — discover, parse, cost, index/watch from the terminal. | core, adapter, analysis, store |
 | [`@glassbox/ui`](./packages/ui) | Local web UI. Placeholder until Phase 2. | (later) |
 
 If `core` ever imports an adapter, analyzer, or UI, the arrow is backwards.
@@ -93,6 +95,16 @@ contracts, working discovery, and the reclaimable-analyzer shape with a working
   real sessions) so x-ray segment sizes carry an honest error bar. Surfaced via
   `glassbox cost <session>`.
 
-Still open for DoD-1: the SQLite local index + watch mode (1.4, ADR 0004) and
-broader golden fixtures (1.5 — subagent, MCP, compacted sessions). See the ADR
-log in [`docs/adr`](./docs/adr).
+- **1.4 Local index + watch** — done. `@glassbox/store` indexes parsed sessions
+  into SQLite (`node:sqlite`, zero native deps). Stored as a JSON model blob +
+  queryable metadata columns (ADR 0004's "store the model, reconstruct on
+  demand" — no per-turn snapshot materialization). `SessionIndexer.sync` is
+  incremental on (mtime, size) — re-indexing 610 real sessions re-parses only
+  what changed (~1.5s cold → ~0.08s warm); `watch` keeps it live via recursive
+  `fs.watch` with per-file debounce. Surfaced via `glassbox index` / `watch` /
+  `sessions`.
+
+Still open for DoD-1: context-snapshot reconstruction (1.3 — the x-ray data, so
+the reclaimable analyzer runs on real sessions) and broader golden fixtures
+(1.5 — subagent, MCP, compacted sessions). See the ADR log in
+[`docs/adr`](./docs/adr).

@@ -1,6 +1,10 @@
 #!/usr/bin/env node
-import { ClaudeCodeAdapter } from "@glassbox/adapter-claude-code";
+import { mkdirSync } from "node:fs";
+import { homedir } from "node:os";
+import { dirname, join } from "node:path";
+import { ClaudeCodeAdapter, claudeProjectsRoot } from "@glassbox/adapter-claude-code";
 import { analyzeSessionCost, checkTokenAccuracy, PRICING_AS_OF } from "@glassbox/analysis";
+import { SessionIndex, SessionIndexer } from "@glassbox/store";
 import { EstimateTokenCounter } from "./token-counter.js";
 
 /**
@@ -69,6 +73,81 @@ async function main(argv: string[]): Promise<number> {
       return 0;
     }
 
+    case "index": {
+      const index = SessionIndex.open(openDbPath(flag(rest, "--db")));
+      try {
+        const indexer = new SessionIndexer(adapter, index);
+        const projectPath = flag(rest, "--project");
+        const r = await indexer.sync(projectPath ? { projectPath } : {});
+        console.log(
+          `indexed: scanned ${r.scanned}, parsed ${r.parsed}, unchanged ${r.unchanged}, ` +
+            `removed ${r.removed}, failed ${r.failed.length}  (${index.stats().sessions} total)`,
+        );
+        for (const f of r.failed.slice(0, 10)) console.log(`  ! ${f.locator}: ${f.error}`);
+      } finally {
+        index.close();
+      }
+      return 0;
+    }
+
+    case "sessions": {
+      const index = SessionIndex.open(openDbPath(flag(rest, "--db")));
+      try {
+        const projectPath = flag(rest, "--project");
+        const limit = flag(rest, "--limit");
+        const rows = index.list({
+          ...(projectPath ? { projectPath } : {}),
+          ...(limit ? { limit: Number(limit) } : {}),
+        });
+        if (rows.length === 0) {
+          console.log("index empty — run `glassbox index` first.");
+          return 0;
+        }
+        for (const m of rows) {
+          console.log(
+            `${m.endedAt}  ${m.sessionId.slice(0, 8)}  ` +
+              `${String(m.messageCount).padStart(4)} msg ${String(m.toolCallCount).padStart(3)} tool ` +
+              `${String(m.memoryOpCount).padStart(2)} mem  ${m.projectPath}`,
+          );
+        }
+        console.log(`(${rows.length} sessions, from the index — no re-parse)`);
+      } finally {
+        index.close();
+      }
+      return 0;
+    }
+
+    case "watch": {
+      const index = SessionIndex.open(openDbPath(flag(rest, "--db")));
+      const indexer = new SessionIndexer(adapter, index);
+      const root = claudeProjectsRoot();
+      const projectPath = flag(rest, "--project");
+      const watcher = await indexer.watch({
+        roots: [root],
+        ...(projectPath ? { discover: { projectPath } } : {}),
+        onEvent: (e) => {
+          if (e.type === "ready") {
+            const r = e.result;
+            console.log(
+              `watching ${root}\n  initial sync: ${r.parsed} parsed, ${r.unchanged} unchanged, ` +
+                `${r.removed} removed (${index.stats().sessions} indexed). Ctrl-C to stop.`,
+            );
+          } else if (e.type === "upserted") console.log(`  + ${e.locator}`);
+          else if (e.type === "removed") console.log(`  - ${e.locator}`);
+          else console.log(`  ! ${e.locator}: ${e.error}`);
+        },
+      });
+      await new Promise<void>((resolve) => {
+        process.once("SIGINT", () => {
+          watcher.close();
+          index.close();
+          console.log("\nstopped.");
+          resolve();
+        });
+      });
+      return 0;
+    }
+
     default:
       console.log(
         [
@@ -78,6 +157,11 @@ async function main(argv: string[]): Promise<number> {
           "  list [--project <path>]   discover Claude Code sessions on disk",
           "  parse <session.jsonl>     parse a session into the normalized model (Phase 1)",
           "  cost <session.jsonl>      cost from provider actuals + token-estimate accuracy",
+          "  index [--project <p>]     parse + (incrementally) index sessions into SQLite",
+          "  sessions [--project <p>]  list indexed sessions fast (metadata only, no re-parse)",
+          "  watch [--project <p>]     index, then keep it live on file changes (Ctrl-C to stop)",
+          "",
+          "  (index/sessions/watch take --db <path>; default ~/.glassbox/index.db)",
         ].join("\n"),
       );
       return command ? 1 : 0;
@@ -92,6 +176,16 @@ function flag(args: string[], name: string): string | undefined {
 /** Format USD with enough precision to show sub-cent agent costs honestly. */
 function usd(n: number): string {
   return n >= 0.01 || n === 0 ? `$${n.toFixed(4)}` : `$${n.toExponential(2)}`;
+}
+
+/**
+ * Resolve the index db path (default `~/.glassbox/index.db`) and ensure its
+ * directory exists. Our own store dir — never the user's project (doc 17 §6).
+ */
+function openDbPath(override: string | undefined): string {
+  const path = override ?? join(homedir(), ".glassbox", "index.db");
+  mkdirSync(dirname(path), { recursive: true });
+  return path;
 }
 
 // Set `exitCode` rather than calling `process.exit()`: a parsed session can be

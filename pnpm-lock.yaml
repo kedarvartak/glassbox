@@ -53,8 +53,17 @@ importers:
       '@glassbox/core':
         specifier: workspace:*
         version: link:../core
+      '@glassbox/store':
+        specifier: workspace:*
+        version: link:../store
 
   packages/core: {}
+
+  packages/store:
+    dependencies:
+      '@glassbox/core':
+        specifier: workspace:*
+        version: link:../core
 
   packages/ui: {}
 

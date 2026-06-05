@@ -8,6 +8,7 @@
   "references": [
     { "path": "../core" },
     { "path": "../adapter-claude-code" },
-    { "path": "../analysis" }
+    { "path": "../analysis" },
+    { "path": "../store" }
   ]
 }
