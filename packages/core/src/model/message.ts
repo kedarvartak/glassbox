@@ -22,6 +22,13 @@ export interface Message {
   /** Present on assistant messages; the actuals from the provider. */
   readonly usage?: TokenUsage;
   readonly model?: string;
+  /**
+   * Provider's own message id (e.g. Claude Code `message.id`, `msg_…`). One API
+   * response is often split across several transcript events that share this id;
+   * the id lets consumers regroup them (and dedupe `usage`, which repeats across
+   * the split). Absent on user/system messages.
+   */
+  readonly providerMessageId?: string;
 
   /** True for messages produced inside a subagent/sidechain. */
   readonly isSidechain: boolean;

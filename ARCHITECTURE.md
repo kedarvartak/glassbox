@@ -73,14 +73,26 @@ Phase 0 (Foundations) is complete: workspace, normalized model, adapter/port
 contracts, working discovery, and the reclaimable-analyzer shape with a working
 "gone" classifier.
 
-**Phase 1 (Ingestion engine) — in progress.** `ClaudeCodeAdapter.parse` is
-implemented (`src/parse.ts`): JSONL → normalized model, with usage deduped per
-provider `message.id`, `tool_use`↔`tool_result` stitching, Read/Write/Edit lifted
-into `FileOp`s, and memory-file ops lifted into `MemoryOp`s. The real on-disk
-schema is documented as types in `src/raw.ts`. A golden-file test
-(`src/parse.test.ts` + `test/fixtures/`) pins the contract; the parser has been
-run across real local sessions (incl. 777-message / 2.5 MB transcripts) with no
-crashes. Still open for DoD-1: a real provider tokenizer (today's `TokenCounter`
-is the ~4-chars/token estimate, so token totals are directional), the SQLite
-local index + watch mode (1.4, ADR 0004), and broader golden fixtures. See the
-ADR log in [`docs/adr`](./docs/adr).
+**Phase 1 (Ingestion engine) — in progress.**
+
+- **1.1 Claude Code adapter** — done. `ClaudeCodeAdapter.parse` (`src/parse.ts`):
+  JSONL → normalized model, with usage deduped per provider `message.id`,
+  `tool_use`↔`tool_result` stitching, Read/Write/Edit lifted into `FileOp`s, and
+  memory-file ops lifted into `MemoryOp`s. The real on-disk schema is documented
+  as types in `src/raw.ts`. A golden-file test (`src/parse.test.ts` +
+  `test/fixtures/`) pins the contract; run across real local sessions (incl.
+  777-message / 2.5 MB transcripts) with no crashes.
+- **1.2 Token & cost accounting** — done. Cost is computed from the provider's
+  **actual** `usage` (captured verbatim) × authoritative per-model pricing
+  (`@glassbox/analysis`: `pricing.ts`, `cost.ts`) — exact, not estimated, with
+  cache-read broken out as the recurring recarry tax (doc 20). Because there is
+  no accurate *local* Claude tokenizer (the only exact count is the network
+  `count_tokens` endpoint, which local-first forbids by default), the
+  `TokenCounter` stays a ~4-chars/token estimate behind a swappable seam, and
+  `token-accuracy.ts` characterizes its error against provider truth (~0.86× on
+  real sessions) so x-ray segment sizes carry an honest error bar. Surfaced via
+  `glassbox cost <session>`.
+
+Still open for DoD-1: the SQLite local index + watch mode (1.4, ADR 0004) and
+broader golden fixtures (1.5 — subagent, MCP, compacted sessions). See the ADR
+log in [`docs/adr`](./docs/adr).

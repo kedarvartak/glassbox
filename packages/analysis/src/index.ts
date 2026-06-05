@@ -6,3 +6,6 @@
  * adapter should have lifted them into the model first.
  */
 export * from "./reclaimable.js";
+export * from "./pricing.js";
+export * from "./cost.js";
+export * from "./token-accuracy.js";

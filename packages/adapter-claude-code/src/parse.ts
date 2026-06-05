@@ -85,11 +85,10 @@ export function parseClaudeSession(
     const isSidechain = t.isSidechain === true;
     const role = roleOf(ev);
 
-    const { blocks, usage, model, isPrompt } = buildBlocks(
+    const { blocks, usage, model, providerMessageId, isPrompt } = buildBlocks(
       ev,
       id,
       timestamp,
-      tokens,
       pendingUses,
       results,
       seenUsageMsgIds,
@@ -104,6 +103,7 @@ export function parseClaudeSession(
       isSidechain,
       ...(usage ? { usage } : {}),
       ...(model ? { model } : {}),
+      ...(providerMessageId ? { providerMessageId } : {}),
     };
     messages.push(message);
     startsTurn.push(isPrompt);
@@ -152,6 +152,7 @@ interface BuiltMessage {
   readonly blocks: ContentBlock[];
   readonly usage: TokenUsage | undefined;
   readonly model: string | undefined;
+  readonly providerMessageId: string | undefined;
   readonly isPrompt: boolean;
 }
 
@@ -159,7 +160,6 @@ function buildBlocks(
   ev: RawEvent,
   messageId: MessageId,
   timestamp: IsoTimestamp,
-  tokens: TokenCounter,
   pendingUses: PendingUse[],
   results: Map<string, PendingResult>,
   seenUsageMsgIds: Set<string>,
@@ -173,6 +173,7 @@ function buildBlocks(
       blocks: [{ kind: "unknown", rawKind, raw: ev }],
       usage: undefined,
       model: undefined,
+      providerMessageId: undefined,
       isPrompt: false,
     };
   }
@@ -188,6 +189,7 @@ function buildBlocks(
       blocks: [{ kind: "text", text: content }],
       usage: undefined,
       model: undefined,
+      providerMessageId: undefined,
       isPrompt,
     };
   }
@@ -212,7 +214,7 @@ function buildBlocks(
   // A user message that carries real text (not only tool_result) starts a turn.
   const isPrompt = ev.type === "user" && msgEv.isMeta !== true && sawText;
 
-  return { blocks, usage, model: msg?.model, isPrompt };
+  return { blocks, usage, model: msg?.model, providerMessageId: provId, isPrompt };
 }
 
 function mapBlock(

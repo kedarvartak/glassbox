@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { ClaudeCodeAdapter } from "@glassbox/adapter-claude-code";
+import { analyzeSessionCost, checkTokenAccuracy, PRICING_AS_OF } from "@glassbox/analysis";
 import { EstimateTokenCounter } from "./token-counter.js";
 
 /**
@@ -11,7 +12,8 @@ import { EstimateTokenCounter } from "./token-counter.js";
  */
 async function main(argv: string[]): Promise<number> {
   const [command, ...rest] = argv;
-  const adapter = new ClaudeCodeAdapter(new EstimateTokenCounter());
+  const tokens = new EstimateTokenCounter();
+  const adapter = new ClaudeCodeAdapter(tokens);
 
   switch (command) {
     case "list": {
@@ -41,6 +43,32 @@ async function main(argv: string[]): Promise<number> {
       return 0;
     }
 
+    case "cost": {
+      const locator = rest[0];
+      if (!locator) {
+        console.error("usage: glassbox cost <session.jsonl>");
+        return 2;
+      }
+      const session = await adapter.parse({ tool: "claude-code", locator });
+      const cost = analyzeSessionCost(session);
+      const accuracy = checkTokenAccuracy(session, tokens);
+
+      const { breakdown } = cost;
+      console.log(`session ${session.id}  (pricing as of ${PRICING_AS_OF})`);
+      console.log(`  model(s):     ${cost.models.map((m) => `${m.model}${m.priced ? "" : " (unpriced)"}`).join(", ") || "—"}`);
+      console.log(`  total cost:   ${usd(cost.totalUsd)}`);
+      console.log(`    input:      ${usd(breakdown.inputUsd)}`);
+      console.log(`    output:     ${usd(breakdown.outputUsd)}`);
+      console.log(`    cache read: ${usd(breakdown.cacheReadUsd)}   (context re-ingested every turn — the recarry tax)`);
+      console.log(`    cache write:${usd(breakdown.cacheWriteUsd)}`);
+      console.log(`  cache saved:  ${usd(cost.cacheSavingsUsd)}   (vs paying full input rate for re-reads)`);
+      if (cost.unpricedMessages > 0) {
+        console.log(`  note: ${cost.unpricedMessages} message(s) had an unknown model and are excluded from cost.`);
+      }
+      console.log(`  token check:  ${accuracy.note}`);
+      return 0;
+    }
+
     default:
       console.log(
         [
@@ -49,6 +77,7 @@ async function main(argv: string[]): Promise<number> {
           "commands:",
           "  list [--project <path>]   discover Claude Code sessions on disk",
           "  parse <session.jsonl>     parse a session into the normalized model (Phase 1)",
+          "  cost <session.jsonl>      cost from provider actuals + token-estimate accuracy",
         ].join("\n"),
       );
       return command ? 1 : 0;
@@ -58,6 +87,11 @@ async function main(argv: string[]): Promise<number> {
 function flag(args: string[], name: string): string | undefined {
   const i = args.indexOf(name);
   return i >= 0 ? args[i + 1] : undefined;
+}
+
+/** Format USD with enough precision to show sub-cent agent costs honestly. */
+function usd(n: number): string {
+  return n >= 0.01 || n === 0 ? `$${n.toFixed(4)}` : `$${n.toExponential(2)}`;
 }
 
 // Set `exitCode` rather than calling `process.exit()`: a parsed session can be
