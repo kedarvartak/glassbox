@@ -2,6 +2,23 @@
   "name": "@glassbox/ui",
   "version": "0.0.0",
   "private": true,
-  "description": "Placeholder for the local web UI (Phase 2 / DoD-2): the context x-ray, reclaimable-tokens report, and memory-health views. Intentionally empty until the engine + analyzers it renders exist.",
-  "type": "module"
+  "description": "The local web dashboard (Vite + React + TS). Reads the local index via the CLI server; nothing leaves the machine. Self-hosted fonts (no CDN).",
+  "type": "module",
+  "files": ["dist"],
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite"
+  },
+  "dependencies": {
+    "@fontsource/ibm-plex-mono": "^5.1.0",
+    "@fontsource/ibm-plex-sans": "^5.1.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "vite": "^5.4.21"
+  }
 }

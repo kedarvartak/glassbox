@@ -75,7 +75,7 @@ Phase 0 (Foundations) is complete: workspace, normalized model, adapter/port
 contracts, working discovery, and the reclaimable-analyzer shape with a working
 "gone" classifier.
 
-**Phase 1 (Ingestion engine) — in progress.**
+**Phase 1 (Ingestion engine) — complete.**
 
 - **1.1 Claude Code adapter** — done. `ClaudeCodeAdapter.parse` (`src/parse.ts`):
   JSONL → normalized model, with usage deduped per provider `message.id`,
@@ -126,7 +126,12 @@ The reclaimable analyzer implements **doc 20's full taxonomy**:
 `glassbox xray` surfaces all four with a $/turn cost, verified on real sessions.
 
 **DoD-1 is met** (a real session → correct model → cost from provider actuals →
-indexed → x-ray + full reclaimable taxonomy, all verified on real data). Next:
-**Phase 2 (The Inspector)** — the local web UI over this engine — plus broader
-golden fixtures (1.5: subagent/MCP/compacted). See the ADR log in
-[`docs/adr`](./docs/adr).
+indexed → x-ray + full reclaimable taxonomy, all verified on real data).
+
+**Phase 2 (The Inspector) — in progress.** The local inspector now has a
+`glassbox` / `glassbox serve` entry point, a `127.0.0.1` API server over the
+SQLite index, and a Vite/React dashboard for session navigation, cost,
+context x-ray, reclaimable context, and explicit compaction-status limitations.
+Remaining DoD-2 work: stronger UI dogfooding, broader edge-case fixtures, and a
+true compaction diff once a compacted transcript schema is observed. See the ADR
+log in [`docs/adr`](./docs/adr).

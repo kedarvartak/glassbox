@@ -23,6 +23,7 @@
     "@glassbox/adapter-claude-code": "workspace:*",
     "@glassbox/analysis": "workspace:*",
     "@glassbox/core": "workspace:*",
-    "@glassbox/store": "workspace:*"
+    "@glassbox/store": "workspace:*",
+    "@glassbox/ui": "workspace:*"
   }
 }

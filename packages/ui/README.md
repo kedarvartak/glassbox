@@ -1,18 +1,21 @@
-# @glassbox/ui (placeholder)
+# @glassbox/ui
 
-The local web UI lands in **Phase 2 (DoD-2)** — see [`docs/17-phased-execution-plan.md`](../../docs/17-phased-execution-plan.md).
+The local web UI for **Phase 2 (DoD-2)** — see [`docs/17-phased-execution-plan.md`](../../docs/17-phased-execution-plan.md).
 
-Per the build-first principle (data layer → analysis layer → UI), this package
-is intentionally empty until there's a correct engine and trustworthy analyzers
-to render. Building the UI before then would mean hardening a view over numbers
-we don't yet trust.
+It renders the same local engine outputs exposed by `glassbox cost`, `glassbox
+xray`, and the SQLite index. The CLI serves the built dashboard from
+`127.0.0.1`; no session data leaves the machine.
 
-Planned views (doc 07 jobs, post-spike hero from doc 19/20):
+Current Phase 2 views:
 
-- **Reclaimable-tokens report** — the headline metric, the screenshot moment.
-- **Context x-ray** — composition by `SegmentSource` (substrate; Claude's
-  `/context` already does a live version, so this supports rather than leads).
-- **Memory health** — stale / dead-reference / unused / conflicting memory.
+- **Reclaimable-tokens report** — the headline metric from doc 20.
+- **Context x-ray** — composition by `SegmentSource`.
+- **Cost attribution** — provider actuals plus cache-read recarry cost.
+- **Compaction status** — schema-ready, but currently shows an explicit limitation
+  when no adapter-observed compaction event exists.
+- **Session navigation** — indexed sessions, project filter, empty/error states.
 
-When work starts here it will be React/TS (per OA3), reading the local index
-the engine writes.
+```bash
+pnpm --filter @glassbox/ui build
+pnpm --filter @glassbox/ui dev
+```
