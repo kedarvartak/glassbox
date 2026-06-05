@@ -1,0 +1,461 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`parseClaudeSession > matches the golden normalized model 1`] = `
+{
+  "compactions": [],
+  "endedAt": "2026-06-04T10:00:20.000Z",
+  "fileOps": [
+    {
+      "contentTokens": 14,
+      "kind": "read",
+      "messageId": "as3",
+      "path": "/home/dev/acme/src/app.ts",
+      "timestamp": "2026-06-04T10:00:02.000Z",
+      "toolCallId": "toolu_read1",
+    },
+    {
+      "contentTokens": 14,
+      "kind": "write",
+      "messageId": "as4",
+      "path": "/home/dev/acme/CLAUDE.md",
+      "timestamp": "2026-06-04T10:00:04.000Z",
+      "toolCallId": "toolu_write1",
+    },
+    {
+      "contentTokens": 16,
+      "kind": "edit",
+      "messageId": "as5",
+      "path": "/home/dev/acme/src/app.ts",
+      "timestamp": "2026-06-04T10:00:05.500Z",
+      "toolCallId": "toolu_edit1",
+    },
+    {
+      "contentTokens": 7,
+      "kind": "read",
+      "messageId": "as6",
+      "path": "/home/dev/acme/memory/notes.md",
+      "timestamp": "2026-06-04T10:00:07.000Z",
+      "toolCallId": "toolu_read2",
+    },
+  ],
+  "gitBranch": "main",
+  "id": "sess-1",
+  "memoryOps": [
+    {
+      "confidence": "inferred",
+      "kind": "write",
+      "messageId": "as4",
+      "target": "/home/dev/acme/CLAUDE.md",
+      "timestamp": "2026-06-04T10:00:04.000Z",
+      "tokens": 14,
+    },
+    {
+      "confidence": "inferred",
+      "kind": "recall",
+      "messageId": "as6",
+      "target": "/home/dev/acme/memory/notes.md",
+      "timestamp": "2026-06-04T10:00:07.000Z",
+      "tokens": 7,
+    },
+  ],
+  "messages": [
+    {
+      "blocks": [
+        {
+          "kind": "text",
+          "text": "Add a greet() helper to app.ts and note our conventions.",
+        },
+      ],
+      "id": "u1",
+      "isSidechain": false,
+      "parentId": null,
+      "role": "user",
+      "timestamp": "2026-06-04T10:00:01.000Z",
+    },
+    {
+      "blocks": [
+        {
+          "kind": "unknown",
+          "raw": {
+            "attachment": {
+              "addedNames": [
+                "src/app.ts",
+                "CLAUDE.md",
+              ],
+              "type": "directory_snapshot",
+            },
+            "cwd": "/home/dev/acme",
+            "gitBranch": "main",
+            "isSidechain": false,
+            "parentUuid": "u1",
+            "sessionId": "sess-1",
+            "timestamp": "2026-06-04T10:00:01.000Z",
+            "type": "attachment",
+            "uuid": "a1",
+            "version": "1.2.3",
+          },
+          "rawKind": "attachment:directory_snapshot",
+        },
+      ],
+      "id": "a1",
+      "isSidechain": false,
+      "parentId": "u1",
+      "role": "system",
+      "timestamp": "2026-06-04T10:00:01.000Z",
+    },
+    {
+      "blocks": [
+        {
+          "kind": "thinking",
+          "text": "I should read app.ts first.",
+        },
+      ],
+      "id": "as1",
+      "isSidechain": false,
+      "model": "claude-sonnet-4-6",
+      "parentId": "a1",
+      "role": "assistant",
+      "timestamp": "2026-06-04T10:00:02.000Z",
+      "usage": {
+        "cacheCreationTokens": 0,
+        "cacheReadTokens": 1000,
+        "inputTokens": 5,
+        "outputTokens": 50,
+      },
+    },
+    {
+      "blocks": [
+        {
+          "kind": "text",
+          "text": "Let me read the file.",
+        },
+      ],
+      "id": "as2",
+      "isSidechain": false,
+      "model": "claude-sonnet-4-6",
+      "parentId": "as1",
+      "role": "assistant",
+      "timestamp": "2026-06-04T10:00:02.000Z",
+    },
+    {
+      "blocks": [
+        {
+          "input": {
+            "file_path": "/home/dev/acme/src/app.ts",
+          },
+          "kind": "tool_use",
+          "name": "Read",
+          "toolCallId": "toolu_read1",
+        },
+      ],
+      "id": "as3",
+      "isSidechain": false,
+      "model": "claude-sonnet-4-6",
+      "parentId": "as2",
+      "role": "assistant",
+      "timestamp": "2026-06-04T10:00:02.000Z",
+    },
+    {
+      "blocks": [
+        {
+          "isError": false,
+          "kind": "tool_result",
+          "raw": [
+            {
+              "text": "     1	import {x} from './x';
+     2	export const a = 1;",
+              "type": "text",
+            },
+          ],
+          "text": "     1	import {x} from './x';
+     2	export const a = 1;",
+          "toolCallId": "toolu_read1",
+        },
+      ],
+      "id": "u2",
+      "isSidechain": false,
+      "parentId": "as3",
+      "role": "user",
+      "timestamp": "2026-06-04T10:00:03.000Z",
+    },
+    {
+      "blocks": [
+        {
+          "input": {
+            "content": "# Project memory
+Use pnpm. Prefer small pure functions.",
+            "file_path": "/home/dev/acme/CLAUDE.md",
+          },
+          "kind": "tool_use",
+          "name": "Write",
+          "toolCallId": "toolu_write1",
+        },
+      ],
+      "id": "as4",
+      "isSidechain": false,
+      "model": "claude-sonnet-4-6",
+      "parentId": "u2",
+      "role": "assistant",
+      "timestamp": "2026-06-04T10:00:04.000Z",
+      "usage": {
+        "cacheCreationTokens": 200,
+        "cacheReadTokens": 1050,
+        "inputTokens": 2,
+        "outputTokens": 120,
+      },
+    },
+    {
+      "blocks": [
+        {
+          "isError": false,
+          "kind": "tool_result",
+          "raw": "File created successfully at /home/dev/acme/CLAUDE.md",
+          "text": "File created successfully at /home/dev/acme/CLAUDE.md",
+          "toolCallId": "toolu_write1",
+        },
+      ],
+      "id": "u3",
+      "isSidechain": false,
+      "parentId": "as4",
+      "role": "user",
+      "timestamp": "2026-06-04T10:00:05.000Z",
+    },
+    {
+      "blocks": [
+        {
+          "input": {
+            "file_path": "/home/dev/acme/src/app.ts",
+            "new_string": "export const a = 1;
+export function greet(n){return \`hi \${n}\`;}",
+            "old_string": "export const a = 1;",
+          },
+          "kind": "tool_use",
+          "name": "Edit",
+          "toolCallId": "toolu_edit1",
+        },
+      ],
+      "id": "as5",
+      "isSidechain": false,
+      "model": "claude-sonnet-4-6",
+      "parentId": "u3",
+      "role": "assistant",
+      "timestamp": "2026-06-04T10:00:05.500Z",
+    },
+    {
+      "blocks": [
+        {
+          "isError": false,
+          "kind": "tool_result",
+          "raw": [
+            {
+              "text": "The file /home/dev/acme/src/app.ts has been updated.",
+              "type": "text",
+            },
+          ],
+          "text": "The file /home/dev/acme/src/app.ts has been updated.",
+          "toolCallId": "toolu_edit1",
+        },
+      ],
+      "id": "u4",
+      "isSidechain": false,
+      "parentId": "as5",
+      "role": "user",
+      "timestamp": "2026-06-04T10:00:06.000Z",
+    },
+    {
+      "blocks": [
+        {
+          "input": {
+            "file_path": "/home/dev/acme/memory/notes.md",
+          },
+          "kind": "tool_use",
+          "name": "Read",
+          "toolCallId": "toolu_read2",
+        },
+      ],
+      "id": "as6",
+      "isSidechain": false,
+      "model": "claude-sonnet-4-6",
+      "parentId": "u4",
+      "role": "assistant",
+      "timestamp": "2026-06-04T10:00:07.000Z",
+      "usage": {
+        "cacheCreationTokens": 40,
+        "cacheReadTokens": 1100,
+        "inputTokens": 1,
+        "outputTokens": 30,
+      },
+    },
+    {
+      "blocks": [
+        {
+          "isError": false,
+          "kind": "tool_result",
+          "raw": "remember: ship on fridays",
+          "text": "remember: ship on fridays",
+          "toolCallId": "toolu_read2",
+        },
+      ],
+      "id": "u5",
+      "isSidechain": false,
+      "parentId": "as6",
+      "role": "user",
+      "timestamp": "2026-06-04T10:00:08.000Z",
+    },
+    {
+      "blocks": [
+        {
+          "kind": "text",
+          "text": "Done — added greet() and recorded conventions in CLAUDE.md.",
+        },
+      ],
+      "id": "as7",
+      "isSidechain": false,
+      "model": "claude-sonnet-4-6",
+      "parentId": "u5",
+      "role": "assistant",
+      "timestamp": "2026-06-04T10:00:09.000Z",
+    },
+    {
+      "blocks": [
+        {
+          "kind": "unknown",
+          "raw": {
+            "cwd": "/home/dev/acme",
+            "durationMs": 8500,
+            "gitBranch": "main",
+            "isSidechain": false,
+            "messageCount": 15,
+            "parentUuid": "as7",
+            "sessionId": "sess-1",
+            "subtype": "turn_duration",
+            "timestamp": "2026-06-04T10:00:09.500Z",
+            "type": "system",
+            "uuid": "sys1",
+            "version": "1.2.3",
+          },
+          "rawKind": "system:turn_duration",
+        },
+      ],
+      "id": "sys1",
+      "isSidechain": false,
+      "parentId": "as7",
+      "role": "system",
+      "timestamp": "2026-06-04T10:00:09.500Z",
+    },
+    {
+      "blocks": [
+        {
+          "kind": "text",
+          "text": "thanks, looks good",
+        },
+      ],
+      "id": "u6",
+      "isSidechain": false,
+      "parentId": "sys1",
+      "role": "user",
+      "timestamp": "2026-06-04T10:00:20.000Z",
+    },
+  ],
+  "projectPath": "/home/dev/acme",
+  "startedAt": "2026-06-04T10:00:01.000Z",
+  "tool": "claude-code",
+  "toolCalls": [
+    {
+      "id": "toolu_read1",
+      "input": {
+        "file_path": "/home/dev/acme/src/app.ts",
+      },
+      "isError": false,
+      "name": "Read",
+      "requestedAt": "2026-06-04T10:00:02.000Z",
+      "requestedInMessageId": "as3",
+      "resolvedAt": "2026-06-04T10:00:03.000Z",
+      "resolvedInMessageId": "u2",
+      "resultText": "     1	import {x} from './x';
+     2	export const a = 1;",
+      "resultTokens": 14,
+    },
+    {
+      "id": "toolu_write1",
+      "input": {
+        "content": "# Project memory
+Use pnpm. Prefer small pure functions.",
+        "file_path": "/home/dev/acme/CLAUDE.md",
+      },
+      "isError": false,
+      "name": "Write",
+      "requestedAt": "2026-06-04T10:00:04.000Z",
+      "requestedInMessageId": "as4",
+      "resolvedAt": "2026-06-04T10:00:05.000Z",
+      "resolvedInMessageId": "u3",
+      "resultText": "File created successfully at /home/dev/acme/CLAUDE.md",
+      "resultTokens": 14,
+    },
+    {
+      "id": "toolu_edit1",
+      "input": {
+        "file_path": "/home/dev/acme/src/app.ts",
+        "new_string": "export const a = 1;
+export function greet(n){return \`hi \${n}\`;}",
+        "old_string": "export const a = 1;",
+      },
+      "isError": false,
+      "name": "Edit",
+      "requestedAt": "2026-06-04T10:00:05.500Z",
+      "requestedInMessageId": "as5",
+      "resolvedAt": "2026-06-04T10:00:06.000Z",
+      "resolvedInMessageId": "u4",
+      "resultText": "The file /home/dev/acme/src/app.ts has been updated.",
+      "resultTokens": 13,
+    },
+    {
+      "id": "toolu_read2",
+      "input": {
+        "file_path": "/home/dev/acme/memory/notes.md",
+      },
+      "isError": false,
+      "name": "Read",
+      "requestedAt": "2026-06-04T10:00:07.000Z",
+      "requestedInMessageId": "as6",
+      "resolvedAt": "2026-06-04T10:00:08.000Z",
+      "resolvedInMessageId": "u5",
+      "resultText": "remember: ship on fridays",
+      "resultTokens": 7,
+    },
+  ],
+  "toolVersion": "1.2.3",
+  "turns": [
+    {
+      "index": 0,
+      "messageIds": [
+        "u1",
+        "a1",
+        "as1",
+        "as2",
+        "as3",
+        "u2",
+        "as4",
+        "u3",
+        "as5",
+        "u4",
+        "as6",
+        "u5",
+        "as7",
+        "sys1",
+      ],
+      "userMessageId": "u1",
+    },
+    {
+      "index": 1,
+      "messageIds": [
+        "u6",
+      ],
+      "userMessageId": "u6",
+    },
+  ],
+  "warnings": [
+    "skipped malformed JSON on line 18",
+  ],
+}
+`;

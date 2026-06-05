@@ -1,14 +1,16 @@
+import { readFile } from "node:fs/promises";
 import type { Adapter, DiscoverOptions, Session, SessionRef, TokenCounter } from "@glassbox/core";
 import { discoverClaudeSessions } from "./discover.js";
+import { parseClaudeSession } from "./parse.js";
 
 /**
- * Claude Code adapter.
+ * Claude Code adapter — the vertical slice's data layer (doc 17 §1.1).
  *
- * `discover` / `canParse` are implemented (cheap, no parsing). `parse` is the
- * Phase-1 workstream (doc 17 §1.1): JSONL → normalized model, including lifting
- * Write/Edit/Read into FileOps and stitching tool_use↔tool_result into
- * ToolCalls. It's stubbed here so the contract compiles and the skeleton is
- * wired end to end; implementing it is the next build step.
+ * Three small, independently testable steps (per the `Adapter` contract):
+ * `discover` and `canParse` are cheap (no parsing); `parse` reads the JSONL off
+ * disk and hands the bytes to the pure {@link parseClaudeSession} (the fs read is
+ * the only impure part — kept here so the parser stays trivially golden-testable).
+ * Claude-specific knowledge lives entirely in this package; nothing leaks out.
  */
 export class ClaudeCodeAdapter implements Adapter {
   readonly tool = "claude-code";
@@ -24,13 +26,8 @@ export class ClaudeCodeAdapter implements Adapter {
     return ref.tool === this.tool && ref.locator.endsWith(".jsonl");
   }
 
-  async parse(_ref: SessionRef): Promise<Session> {
-    // Phase 1: stream JSONL lines → normalized Message[] → derive turns,
-    // toolCalls, fileOps, memoryOps using `this.tokens` for sizing.
-    void this.tokens;
-    throw new Error(
-      "ClaudeCodeAdapter.parse is not implemented yet (Phase 1 / DoD-1). " +
-        "Schema is captured in docs/19 + docs/20; the normalized target is @glassbox/core.",
-    );
+  async parse(ref: SessionRef): Promise<Session> {
+    const content = await readFile(ref.locator, "utf8");
+    return parseClaudeSession(content, ref, this.tokens);
   }
 }

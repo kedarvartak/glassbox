@@ -60,9 +60,15 @@ function flag(args: string[], name: string): string | undefined {
   return i >= 0 ? args[i + 1] : undefined;
 }
 
+// Set `exitCode` rather than calling `process.exit()`: a parsed session can be
+// many MB of JSON, and `console.log` to a pipe is async — force-exiting would
+// truncate stdout at the OS pipe-buffer boundary. Letting the event loop drain
+// guarantees the full normalized model is written before we exit.
 main(process.argv.slice(2))
-  .then((code) => process.exit(code))
+  .then((code) => {
+    process.exitCode = code;
+  })
   .catch((err: unknown) => {
     console.error(err instanceof Error ? err.message : String(err));
-    process.exit(1);
+    process.exitCode = 1;
   });
