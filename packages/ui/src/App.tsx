@@ -37,18 +37,6 @@ export function App() {
 
   return (
     <div className="app">
-      <header className="topbar">
-        <span className="wordmark">
-          GLASS<b>BOX</b>
-        </span>
-        <span className="badge">
-          <span className="dot" />
-          local · read-only
-        </span>
-        <span className="spacer" />
-        <span className="meta">context x-ray · hygiene monitor</span>
-      </header>
-
       <div className="body">
         <Sidebar
           sessions={sessions ?? []}
@@ -59,7 +47,7 @@ export function App() {
           {error ? (
             <div className="center">
               <div>
-                <div style={{ color: "var(--waste)", marginBottom: 6 }}>failed to load</div>
+                <div style={{ color: "var(--gone)", marginBottom: 6 }}>failed to load</div>
                 {error}
               </div>
             </div>

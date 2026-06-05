@@ -4,14 +4,15 @@
   "private": true,
   "description": "The local web dashboard (Vite + React + TS). Reads the local index via the CLI server; nothing leaves the machine. Self-hosted fonts (no CDN).",
   "type": "module",
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "vite build",
     "dev": "vite"
   },
   "dependencies": {
-    "@fontsource/ibm-plex-mono": "^5.1.0",
-    "@fontsource/ibm-plex-sans": "^5.1.0",
+    "@fontsource/plus-jakarta-sans": "^5.2.8",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
