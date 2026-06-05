@@ -104,7 +104,18 @@ contracts, working discovery, and the reclaimable-analyzer shape with a working
   `fs.watch` with per-file debounce. Surfaced via `glassbox index` / `watch` /
   `sessions`.
 
-Still open for DoD-1: context-snapshot reconstruction (1.3 — the x-ray data, so
-the reclaimable analyzer runs on real sessions) and broader golden fixtures
-(1.5 — subagent, MCP, compacted sessions). See the ADR log in
-[`docs/adr`](./docs/adr).
+- **1.3 Context reconstruction** — done. `@glassbox/analysis`: `reconstructContext`
+  derives, for any turn, the resident `ContextSnapshot` — segments by source
+  (user/assistant/thinking history, file contents, non-file tool output, memory)
+  with `status: "unknown"` (facts only; verdicts stay in the analyzer). File and
+  tool segments reuse the adapter's token counts; text is sized via the
+  `TokenCounter`. `FsRepoState` (read-only) gives the analyzer a real filesystem,
+  so `analyzeReclaimable` now runs on real sessions: `glassbox xray` shows the
+  composition breakdown and flags resident content of deleted files as `gone`
+  with a $/turn cost (doc 20's reclaimable-% metric, verified on real data).
+
+DoD-1 is substantially met (a real session → correct model → cost from actuals →
+indexed → x-ray + reclaimable). Remaining polish: broader golden fixtures
+(1.5 — subagent, MCP, compacted sessions) and session-level spent/duplicate
+detection (doc 20 Type #3, currently only `gone` is classified). See the ADR log
+in [`docs/adr`](./docs/adr).

@@ -3,7 +3,16 @@ import { mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { ClaudeCodeAdapter, claudeProjectsRoot } from "@glassbox/adapter-claude-code";
-import { analyzeSessionCost, checkTokenAccuracy, PRICING_AS_OF } from "@glassbox/analysis";
+import {
+  analyzeReclaimable,
+  analyzeSessionCost,
+  checkTokenAccuracy,
+  composition,
+  FsRepoState,
+  PRICING_AS_OF,
+  pricingFor,
+  reconstructContext,
+} from "@glassbox/analysis";
 import { SessionIndex, SessionIndexer } from "@glassbox/store";
 import { EstimateTokenCounter } from "./token-counter.js";
 
@@ -70,6 +79,46 @@ async function main(argv: string[]): Promise<number> {
         console.log(`  note: ${cost.unpricedMessages} message(s) had an unknown model and are excluded from cost.`);
       }
       console.log(`  token check:  ${accuracy.note}`);
+      return 0;
+    }
+
+    case "xray": {
+      const locator = rest[0];
+      if (!locator) {
+        console.error("usage: glassbox xray <session.jsonl>");
+        return 2;
+      }
+      const session = await adapter.parse({ tool: "claude-code", locator });
+      const snapshot = reconstructContext(session, { tokens });
+      const pricing = pricingFor(session.messages.find((m) => m.model)?.model);
+      const repo = new FsRepoState();
+      const report = await analyzeReclaimable(snapshot, { repo, ...(pricing ? { pricing } : {}) });
+
+      console.log(`session ${session.id}`);
+      console.log(
+        `  resident (attributed): ${snapshot.totalTokens.toLocaleString("en-US")} tokens in ` +
+          `${snapshot.segments.length} segments`,
+      );
+      console.log("  composition by source:");
+      for (const { source, tokens: t } of composition(snapshot)) {
+        const pct = snapshot.totalTokens ? Math.round((100 * t) / snapshot.totalTokens) : 0;
+        console.log(`    ${source.padEnd(12)} ${String(t).padStart(8)}  ${String(pct).padStart(3)}%`);
+      }
+      console.log(
+        `  reclaimable: ${report.reclaimableTokens.toLocaleString("en-US")} tokens ` +
+          `(${Math.round(report.reclaimablePct * 100)}% of attributed)` +
+          (report.wastedUsdPerTurn !== null
+            ? ` — ~${usd(report.wastedUsdPerTurn)}/turn it persists`
+            : ""),
+      );
+      const bs = report.byStatus;
+      console.log(`    gone ${bs.gone}  stale ${bs.stale}  spent ${bs.spent}  duplicate ${bs.duplicate}`);
+      for (const item of report.items.slice(0, 8)) {
+        console.log(`    - ${item.status} ${String(item.tokens).padStart(6)} tok  ${item.label}`);
+      }
+      if (report.items.length === 0) {
+        console.log("    (nothing reclaimable detected — needs deleted/overwritten files to flag)");
+      }
       return 0;
     }
 
@@ -157,6 +206,7 @@ async function main(argv: string[]): Promise<number> {
           "  list [--project <path>]   discover Claude Code sessions on disk",
           "  parse <session.jsonl>     parse a session into the normalized model (Phase 1)",
           "  cost <session.jsonl>      cost from provider actuals + token-estimate accuracy",
+          "  xray <session.jsonl>      context composition by source + reclaimable tokens",
           "  index [--project <p>]     parse + (incrementally) index sessions into SQLite",
           "  sessions [--project <p>]  list indexed sessions fast (metadata only, no re-parse)",
           "  watch [--project <p>]     index, then keep it live on file changes (Ctrl-C to stop)",
