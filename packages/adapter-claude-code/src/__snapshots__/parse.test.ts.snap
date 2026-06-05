@@ -6,6 +6,7 @@ exports[`parseClaudeSession > matches the golden normalized model 1`] = `
   "endedAt": "2026-06-04T10:00:20.000Z",
   "fileOps": [
     {
+      "contentHash": "2cd24a5434fec99f",
       "contentTokens": 14,
       "kind": "read",
       "messageId": "as3",
@@ -14,6 +15,7 @@ exports[`parseClaudeSession > matches the golden normalized model 1`] = `
       "toolCallId": "toolu_read1",
     },
     {
+      "contentHash": "e329b56f9d5e89f8",
       "contentTokens": 14,
       "kind": "write",
       "messageId": "as4",
@@ -22,6 +24,7 @@ exports[`parseClaudeSession > matches the golden normalized model 1`] = `
       "toolCallId": "toolu_write1",
     },
     {
+      "contentHash": "1c29c7a50ccf2a24",
       "contentTokens": 16,
       "kind": "edit",
       "messageId": "as5",
@@ -30,6 +33,7 @@ exports[`parseClaudeSession > matches the golden normalized model 1`] = `
       "toolCallId": "toolu_edit1",
     },
     {
+      "contentHash": "cc16b10906353bc9",
       "contentTokens": 7,
       "kind": "read",
       "messageId": "as6",
@@ -369,6 +373,7 @@ export function greet(n){return \`hi \${n}\`;}",
   "tool": "claude-code",
   "toolCalls": [
     {
+      "contentHash": "2cd24a5434fec99f",
       "id": "toolu_read1",
       "input": {
         "file_path": "/home/dev/acme/src/app.ts",
@@ -384,6 +389,7 @@ export function greet(n){return \`hi \${n}\`;}",
       "resultTokens": 14,
     },
     {
+      "contentHash": "745a1d25a598cf07",
       "id": "toolu_write1",
       "input": {
         "content": "# Project memory
@@ -400,6 +406,7 @@ Use pnpm. Prefer small pure functions.",
       "resultTokens": 14,
     },
     {
+      "contentHash": "a88cc8d6ae162065",
       "id": "toolu_edit1",
       "input": {
         "file_path": "/home/dev/acme/src/app.ts",
@@ -417,6 +424,7 @@ export function greet(n){return \`hi \${n}\`;}",
       "resultTokens": 13,
     },
     {
+      "contentHash": "cc16b10906353bc9",
       "id": "toolu_read2",
       "input": {
         "file_path": "/home/dev/acme/memory/notes.md",

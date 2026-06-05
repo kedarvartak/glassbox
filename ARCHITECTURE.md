@@ -114,8 +114,19 @@ contracts, working discovery, and the reclaimable-analyzer shape with a working
   composition breakdown and flags resident content of deleted files as `gone`
   with a $/turn cost (doc 20's reclaimable-% metric, verified on real data).
 
-DoD-1 is substantially met (a real session → correct model → cost from actuals →
-indexed → x-ray + reclaimable). Remaining polish: broader golden fixtures
-(1.5 — subagent, MCP, compacted sessions) and session-level spent/duplicate
-detection (doc 20 Type #3, currently only `gone` is classified). See the ADR log
-in [`docs/adr`](./docs/adr).
+The reclaimable analyzer implements **doc 20's full taxonomy**:
+- **`gone`** — content of a file deleted on disk (per-segment, via `RepoState`).
+- **`stale`** — an older copy of a path a later access supersedes (Type #2).
+- **`duplicate`** — byte-identical to a later resident copy, matched on a content
+  hash the adapter records on `FileOp`/`ToolCall` (so analysis dedups on an
+  abstract fingerprint, never re-reading files).
+- **`spent`** — one-shot tool output (Bash/Grep/…) from a turn the agent has
+  moved past (Type #3; a conservative heuristic, labeled as such in its reason).
+
+`glassbox xray` surfaces all four with a $/turn cost, verified on real sessions.
+
+**DoD-1 is met** (a real session → correct model → cost from provider actuals →
+indexed → x-ray + full reclaimable taxonomy, all verified on real data). Next:
+**Phase 2 (The Inspector)** — the local web UI over this engine — plus broader
+golden fixtures (1.5: subagent/MCP/compacted). See the ADR log in
+[`docs/adr`](./docs/adr).

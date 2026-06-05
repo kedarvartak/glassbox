@@ -24,6 +24,8 @@ export interface ToolCall {
 
   /** Token size of the result payload — what this call cost the window. */
   readonly resultTokens: number | null;
+  /** Stable hash of `resultText` — for duplicate-output detection (doc 20). */
+  readonly contentHash?: string;
 
   readonly requestedAt: IsoTimestamp;
   readonly resolvedAt: IsoTimestamp | null;

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type {
   ContentBlock,
   FileOp,
@@ -325,6 +326,7 @@ function stitch(
       resultText,
       isError: result?.isError ?? false,
       resultTokens: resultText !== null ? tokens.count(resultText) : null,
+      ...(resultText !== null ? { contentHash: sha(resultText) } : {}),
       requestedAt: use.timestamp,
       resolvedAt: result?.timestamp ?? null,
     });
@@ -352,21 +354,23 @@ function liftFileOp(
   const path = typeof input["file_path"] === "string" ? (input["file_path"] as string) : null;
   if (!path) return null;
 
-  // Content tokens come from wherever the file text entered the window: a Read
-  // injects it via the *result*; a Write/Edit via its *input*.
-  let contentTokens = 0;
+  // The content that entered the window comes from wherever the file text was:
+  // a Read injects it via the *result*; a Write/Edit via its *input*. Token size
+  // and content hash are both derived from that one string.
+  let content = "";
   if (kind === "read") {
-    contentTokens = result ? tokens.count(result.text) : 0;
+    content = result?.text ?? "";
   } else if (kind === "write") {
-    contentTokens = tokens.count(asStr(input["content"]));
+    content = asStr(input["content"]);
   } else if (kind === "edit") {
-    contentTokens = tokens.count(editedText(input));
+    content = editedText(input);
   }
 
   return {
     kind,
     path,
-    contentTokens,
+    contentTokens: tokens.count(content),
+    ...(content ? { contentHash: sha(content) } : {}),
     toolCallId: asToolCallId(use.id),
     messageId: use.messageId,
     timestamp: use.timestamp,
@@ -457,6 +461,11 @@ function buildTurns(messages: readonly Message[], startsTurn: readonly boolean[]
 
 function asStr(v: unknown): string {
   return typeof v === "string" ? v : "";
+}
+
+/** Short content fingerprint for byte-identical duplicate detection (doc 20). */
+function sha(text: string): string {
+  return createHash("sha256").update(text).digest("hex").slice(0, 16);
 }
 
 /** Session-level fields, taken from the first event that carries each. */

@@ -4,14 +4,13 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { ClaudeCodeAdapter, claudeProjectsRoot } from "@glassbox/adapter-claude-code";
 import {
-  analyzeReclaimable,
   analyzeSessionCost,
+  analyzeSessionReclaimable,
   checkTokenAccuracy,
   composition,
   FsRepoState,
   PRICING_AS_OF,
   pricingFor,
-  reconstructContext,
 } from "@glassbox/analysis";
 import { SessionIndex, SessionIndexer } from "@glassbox/store";
 import { EstimateTokenCounter } from "./token-counter.js";
@@ -89,10 +88,12 @@ async function main(argv: string[]): Promise<number> {
         return 2;
       }
       const session = await adapter.parse({ tool: "claude-code", locator });
-      const snapshot = reconstructContext(session, { tokens });
       const pricing = pricingFor(session.messages.find((m) => m.model)?.model);
-      const repo = new FsRepoState();
-      const report = await analyzeReclaimable(snapshot, { repo, ...(pricing ? { pricing } : {}) });
+      const { snapshot, report } = await analyzeSessionReclaimable(session, {
+        repo: new FsRepoState(),
+        tokens,
+        ...(pricing ? { pricing } : {}),
+      });
 
       console.log(`session ${session.id}`);
       console.log(

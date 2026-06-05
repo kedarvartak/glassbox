@@ -21,6 +21,13 @@ export interface FileOp {
   readonly path: string;
   /** Tokens of file content this op injected into the window. */
   readonly contentTokens: number;
+  /**
+   * Stable hash of the injected content. Lets the analysis layer spot
+   * byte-identical *duplicate* copies resident in the window (doc 20) on an
+   * abstract fingerprint — without re-reading files or parsing tool inputs
+   * (the adapter, which already holds the content, computes this).
+   */
+  readonly contentHash?: string;
 
   readonly toolCallId: ToolCallId;
   readonly messageId: MessageId;
