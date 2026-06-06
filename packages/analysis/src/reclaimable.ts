@@ -31,12 +31,31 @@ import { reconstructContext } from "./context.js";
  *
  * The verdict logic lives here; the arithmetic is the shared {@link foldReclaimable}.
  */
+/**
+ * Fine-grained reason a segment is reclaimable — a stable discriminator the
+ * cleaner ({@link import("./cleaner.js")}) keys on. `status` is the coarse
+ * bucket; `detail` distinguishes the cases that share a status but need
+ * different handling (notably stale-drift, which is cleanable, vs
+ * stale-superseded, which the agent already re-read and so isn't actionable).
+ */
+export type ReclaimableDetail =
+  | "gone"
+  | "stale-drift"
+  | "stale-superseded"
+  | "spent-tool"
+  | "spent-mcp"
+  | "duplicate";
+
 export interface ReclaimableItem {
   readonly segmentId: SegmentId;
   readonly label: string;
   readonly status: SegmentStatus;
   readonly reason: string;
   readonly tokens: number;
+  /** Source file path, when the segment is file-backed (gone/stale). */
+  readonly path?: string;
+  /** Stable fine-grained classification for downstream actioning. */
+  readonly detail?: ReclaimableDetail;
 }
 
 export interface ReclaimableReport {
@@ -55,6 +74,7 @@ export interface ReclaimableReport {
 interface Verdict {
   readonly status: SegmentStatus;
   readonly reason: string;
+  readonly detail?: ReclaimableDetail;
 }
 
 export interface ReclaimableOptions {
@@ -166,25 +186,27 @@ async function classifySessionSegments(
   const verdicts = new Map<SegmentId, Verdict>();
   for (const seg of snapshot.segments) {
     if (duplicate.has(seg.id)) {
-      verdicts.set(seg.id, { status: "duplicate", reason: "byte-identical to a later copy still resident in the window" });
+      verdicts.set(seg.id, { status: "duplicate", detail: "duplicate", reason: "byte-identical to a later copy still resident in the window" });
       continue;
     }
     const stale = superseded.get(seg.id);
     if (stale) {
-      verdicts.set(seg.id, { status: "stale", reason: stale });
+      // Superseded in-session: the agent already re-read a newer copy, so this
+      // is not separately actionable (the cleaner skips stale-superseded).
+      verdicts.set(seg.id, { status: "stale", detail: "stale-superseded", reason: stale });
       continue;
     }
     if (seg.path) {
       // Single modifiedAt call answers both existence (null = gone) and drift.
       const modTs = await repo.modifiedAt(seg.path);
       if (modTs === null) {
-        verdicts.set(seg.id, { status: "gone", reason: `file no longer exists: ${seg.path}` });
+        verdicts.set(seg.id, { status: "gone", detail: "gone", reason: `file no longer exists: ${seg.path}` });
       } else {
         const originMsg = msgById.get(seg.originMessageId);
         const capturedMs = originMsg ? new Date(originMsg.timestamp).getTime() : null;
         // 3 s grace prevents false positives when mtime ≈ write/edit timestamp.
         if (capturedMs !== null && modTs > capturedMs + 3_000) {
-          verdicts.set(seg.id, { status: "stale", reason: `file was modified on disk after this copy was captured` });
+          verdicts.set(seg.id, { status: "stale", detail: "stale-drift", reason: `file was modified on disk after this copy was captured` });
         } else {
           verdicts.set(seg.id, { status: "live", reason: "no reclaimable signal" });
         }
@@ -198,6 +220,7 @@ async function classifySessionSegments(
       if (isMcp || (name && ONE_SHOT_TOOLS.has(name))) {
         verdicts.set(seg.id, {
           status: "spent",
+          detail: isMcp ? "spent-mcp" : "spent-tool",
           reason: isMcp
             ? `MCP tool output from an earlier turn — envelope + ephemeral data, not needed after use`
             : `one-shot ${name} output from an earlier turn — typically dead weight after use`,
@@ -220,7 +243,7 @@ export async function classifySegment(segment: Segment, repo: RepoState): Promis
   if (segment.path) {
     const exists = await repo.exists(segment.path);
     if (!exists) {
-      return { status: "gone", reason: `file no longer exists: ${segment.path}` };
+      return { status: "gone", detail: "gone", reason: `file no longer exists: ${segment.path}` };
     }
   }
   return { status: "live", reason: "no reclaimable signal" };
@@ -276,6 +299,8 @@ export function foldReclaimable(
       status: verdict.status,
       reason: verdict.reason,
       tokens: segment.sizeTokens,
+      ...(segment.path ? { path: segment.path } : {}),
+      ...(verdict.detail ? { detail: verdict.detail } : {}),
     });
   }
 

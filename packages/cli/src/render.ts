@@ -2,6 +2,7 @@
  * CLI renderer — all terminal output lives here.
  * Pure ANSI/Unicode, zero dependencies.
  */
+import type { CleanPlan } from "@glassbox/analysis";
 
 // ─── ANSI ────────────────────────────────────────────────────────────────────
 
@@ -306,6 +307,81 @@ export function renderReclaimable(r: ReclaimableReport, totalTokens: number): vo
     }
   }
   nl();
+}
+
+// ─── clean plan ───────────────────────────────────────────────────────────────
+
+export function renderCleanPlan(plan: CleanPlan, dryRun: boolean): void {
+  hr("CLEAN PLAN");
+  nl();
+
+  if (dryRun) {
+    console.log(`  ${dim("dry run — nothing is written. add")} ${bold("--apply")} ${dim("to act.")}`);
+    nl();
+  }
+
+  // CLAUDE.md actions
+  if (plan.claudeMdBlocks.length === 0) {
+    console.log(`  ${green("✓")}  ${gray("no file-level fixes — no deleted or drifted files in the window.")}`);
+  } else {
+    console.log(`  ${bold("CLAUDE.md")} ${gray("— tell the agent which files to stop trusting:")}`);
+    nl();
+    const verb = (t: string) => (t === "stop_referencing" ? red("STOP") : yellow("RE-READ"));
+    for (const a of plan.claudeMdBlocks) {
+      const tag = rpad(verb(a.type), 7 + 9); // +9 ANSI
+      const tok = lpad(bold(fmtTok(a.reclaimableTokens)), 7);
+      console.log(`  ${tag}  ${tok}  ${bold(a.path)}  ${dim("(" + a.confidence + ")")}`);
+      console.log(`  ${" ".repeat(7)}  ${" ".repeat(7)}  ${gray(a.reason)}`);
+    }
+  }
+  nl();
+
+  // compact recommendation
+  const c = plan.compactRecommendation;
+  if (c) {
+    console.log(`  ${bold("COMPACT")} ${gray("— window is")} ${bold(red(fmtPct(c.reclaimablePct)))} ${gray("reclaimable; a compact would clear the bulk:")}`);
+    nl();
+    console.log(`    ${gray("spent tool/MCP output")}   ${bold(fmtTok(c.spentTokens))} tok`);
+    console.log(`    ${gray("duplicate copies")}        ${bold(fmtTok(c.duplicateTokens))} tok`);
+    if (c.estimatedUsdSaved !== null) {
+      console.log(`    ${gray("stops wasting")}           ${bold(green("~" + fmtUsd(c.estimatedUsdSaved) + "/turn"))}`);
+    }
+    nl();
+    console.log(`    ${dim("suggested /compact focus:")}`);
+    console.log(`    ${cyan(wrap(c.suggestedSummaryFocus, 4))}`);
+  } else {
+    console.log(`  ${gray("no compact recommended — reclaimable% is below the threshold.")}`);
+  }
+  nl();
+
+  // summary
+  const usd = plan.summary.estimatedUsdSaved;
+  console.log(
+    `  ${dim("plan:")} ${bold(String(plan.summary.actionCount))} file action(s)` +
+    (c ? ` ${dim("+ 1 compact")}` : "") +
+    `  ${dim("·")}  ${bold(fmtTok(plan.summary.reclaimableTokens))} tok reclaimable` +
+    (usd !== null ? `  ${dim("·")}  ${green("~" + fmtUsd(usd) + "/turn")}` : "")
+  );
+  nl();
+}
+
+/** Soft-wrap a long string with a left indent, for the compact focus line. */
+function wrap(text: string, indent: number): string {
+  const pad = " ".repeat(indent);
+  const max = W - indent - 2;
+  const words = text.split(" ");
+  const lines: string[] = [];
+  let line = "";
+  for (const w of words) {
+    if ((line + " " + w).trim().length > max) {
+      lines.push(line.trim());
+      line = w;
+    } else {
+      line += " " + w;
+    }
+  }
+  if (line.trim()) lines.push(line.trim());
+  return lines.join("\n" + pad);
 }
 
 export interface SessionRow {

@@ -10,6 +10,7 @@ import {
   composition,
   FsRepoState,
   PRICING_AS_OF,
+  plan,
   pricingFor,
 } from "@glassbox/analysis";
 import { SessionIndex, SessionIndexer } from "@glassbox/store";
@@ -19,6 +20,7 @@ import {
   bold, dim, gray, green, yellow, red, nl, hr,
   fmtUsd, fmtTok, fmtPct, fmtInt,
   renderHeader, renderStats, renderXray, renderCost, renderReclaimable, renderSessions,
+  renderCleanPlan,
 } from "./render.js";
 
 /**
@@ -194,6 +196,46 @@ async function main(argv: string[]): Promise<number> {
       return 0;
     }
 
+    case "clean": {
+      const locator = rest[0];
+      if (!locator) {
+        console.error("usage: glassbox clean <session.jsonl> [--json]");
+        return 2;
+      }
+      const session = await adapter.parse({ tool: "claude-code", locator });
+      const pricing = pricingFor(session.messages.find((m) => m.model)?.model);
+      const model = session.messages.find((m) => m.model)?.model ?? "—";
+      const { report } = await analyzeSessionReclaimable(session, {
+        repo: new FsRepoState(),
+        tokens,
+        ...(pricing ? { pricing } : {}),
+      });
+      const cleanPlan = plan(report, session);
+
+      if (rest.includes("--json")) {
+        console.log(JSON.stringify(cleanPlan, null, 2));
+        return 0;
+      }
+
+      renderHeader({
+        sessionId: session.id,
+        projectPath: session.projectPath,
+        gitBranch: session.gitBranch,
+        toolVersion: session.toolVersion,
+        startedAt: session.startedAt,
+        endedAt: session.endedAt,
+        messageCount: session.messages.length,
+        turnCount: session.turns.length,
+        toolCallCount: session.toolCalls.length,
+        fileOpCount: session.fileOps.length,
+        memoryOpCount: session.memoryOps.length,
+      }, model);
+
+      // Phase B: read-only dry run. --apply (write) lands in Phase C.
+      renderCleanPlan(cleanPlan, true);
+      return 0;
+    }
+
     case "index": {
       const index = SessionIndex.open(openDbPath(flag(rest, "--db")));
       try {
@@ -307,6 +349,7 @@ async function main(argv: string[]): Promise<number> {
         ["inspect <session.jsonl>",        "full dashboard: stats + x-ray + cost + reclaimable"],
         ["xray <session.jsonl>",           "context composition by source + reclaimable tokens"],
         ["cost <session.jsonl>",           "cost breakdown from provider actuals"],
+        ["clean <session.jsonl>",          "dry-run hygiene plan: CLAUDE.md fixes + compact advice"],
         ["sessions [--project <p>]",       "list indexed sessions (fast, no re-parse)"],
         ["index [--project <p>]",          "parse + incrementally index sessions into SQLite"],
         ["watch [--project <p>]",          "index then keep it live on file changes"],
