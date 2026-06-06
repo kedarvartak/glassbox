@@ -15,6 +15,11 @@ import {
 import { SessionIndex, SessionIndexer } from "@glassbox/store";
 import { startServer, uiIsBuilt } from "./server.js";
 import { EstimateTokenCounter } from "./token-counter.js";
+import {
+  bold, dim, gray, green, yellow, red, nl, hr,
+  fmtUsd, fmtTok, fmtPct, fmtInt,
+  renderHeader, renderStats, renderXray, renderCost, renderReclaimable, renderSessions,
+} from "./render.js";
 
 /**
  * `glassbox` entry point. Hand-rolled dispatch (no arg-parsing dep) keeps the
@@ -64,21 +69,31 @@ async function main(argv: string[]): Promise<number> {
       }
       const session = await adapter.parse({ tool: "claude-code", locator });
       const cost = analyzeSessionCost(session);
-      const accuracy = checkTokenAccuracy(session, tokens);
+      const model = session.messages.find((m) => m.model)?.model ?? "—";
 
-      const { breakdown } = cost;
-      console.log(`session ${session.id}  (pricing as of ${PRICING_AS_OF})`);
-      console.log(`  model(s):     ${cost.models.map((m) => `${m.model}${m.priced ? "" : " (unpriced)"}`).join(", ") || "—"}`);
-      console.log(`  total cost:   ${usd(cost.totalUsd)}`);
-      console.log(`    input:      ${usd(breakdown.inputUsd)}`);
-      console.log(`    output:     ${usd(breakdown.outputUsd)}`);
-      console.log(`    cache read: ${usd(breakdown.cacheReadUsd)}   (context re-ingested every turn — the recarry tax)`);
-      console.log(`    cache write:${usd(breakdown.cacheWriteUsd)}`);
-      console.log(`  cache saved:  ${usd(cost.cacheSavingsUsd)}   (vs paying full input rate for re-reads)`);
-      if (cost.unpricedMessages > 0) {
-        console.log(`  note: ${cost.unpricedMessages} message(s) had an unknown model and are excluded from cost.`);
-      }
-      console.log(`  token check:  ${accuracy.note}`);
+      renderHeader({
+        sessionId: session.id,
+        projectPath: session.projectPath,
+        gitBranch: session.gitBranch,
+        toolVersion: session.toolVersion,
+        startedAt: session.startedAt,
+        endedAt: session.endedAt,
+        messageCount: session.messages.length,
+        turnCount: session.turns.length,
+        toolCallCount: session.toolCalls.length,
+        fileOpCount: session.fileOps.length,
+        memoryOpCount: session.memoryOps.length,
+      }, model);
+
+      renderCost({
+        totalUsd: cost.totalUsd,
+        inputUsd: cost.breakdown.inputUsd,
+        outputUsd: cost.breakdown.outputUsd,
+        cacheReadUsd: cost.breakdown.cacheReadUsd,
+        cacheWriteUsd: cost.breakdown.cacheWriteUsd,
+        cacheSavingsUsd: cost.cacheSavingsUsd,
+        unpricedMessages: cost.unpricedMessages,
+      });
       return 0;
     }
 
@@ -90,37 +105,92 @@ async function main(argv: string[]): Promise<number> {
       }
       const session = await adapter.parse({ tool: "claude-code", locator });
       const pricing = pricingFor(session.messages.find((m) => m.model)?.model);
+      const model = session.messages.find((m) => m.model)?.model ?? "—";
       const { snapshot, report } = await analyzeSessionReclaimable(session, {
         repo: new FsRepoState(),
         tokens,
         ...(pricing ? { pricing } : {}),
       });
 
-      console.log(`session ${session.id}`);
-      console.log(
-        `  resident (attributed): ${snapshot.totalTokens.toLocaleString("en-US")} tokens in ` +
-          `${snapshot.segments.length} segments`,
-      );
-      console.log("  composition by source:");
-      for (const { source, tokens: t } of composition(snapshot)) {
-        const pct = snapshot.totalTokens ? Math.round((100 * t) / snapshot.totalTokens) : 0;
-        console.log(`    ${source.padEnd(12)} ${String(t).padStart(8)}  ${String(pct).padStart(3)}%`);
+      renderHeader({
+        sessionId: session.id,
+        projectPath: session.projectPath,
+        gitBranch: session.gitBranch,
+        toolVersion: session.toolVersion,
+        startedAt: session.startedAt,
+        endedAt: session.endedAt,
+        messageCount: session.messages.length,
+        turnCount: session.turns.length,
+        toolCallCount: session.toolCalls.length,
+        fileOpCount: session.fileOps.length,
+        memoryOpCount: session.memoryOps.length,
+      }, model);
+
+      renderXray(composition(snapshot), snapshot.totalTokens);
+      renderReclaimable({
+        reclaimableTokens: report.reclaimableTokens,
+        reclaimablePct: report.reclaimablePct,
+        wastedUsdPerTurn: report.wastedUsdPerTurn,
+        byStatus: report.byStatus as Record<string, number>,
+        items: report.items.slice(0, 12),
+      }, snapshot.totalTokens);
+      return 0;
+    }
+
+    case "inspect": {
+      const locator = rest[0];
+      if (!locator) {
+        console.error("usage: glassbox inspect <session.jsonl>");
+        return 2;
       }
-      console.log(
-        `  reclaimable: ${report.reclaimableTokens.toLocaleString("en-US")} tokens ` +
-          `(${Math.round(report.reclaimablePct * 100)}% of attributed)` +
-          (report.wastedUsdPerTurn !== null
-            ? ` — ~${usd(report.wastedUsdPerTurn)}/turn it persists`
-            : ""),
-      );
-      const bs = report.byStatus;
-      console.log(`    gone ${bs.gone}  stale ${bs.stale}  spent ${bs.spent}  duplicate ${bs.duplicate}`);
-      for (const item of report.items.slice(0, 8)) {
-        console.log(`    - ${item.status} ${String(item.tokens).padStart(6)} tok  ${item.label}`);
-      }
-      if (report.items.length === 0) {
-        console.log("    (nothing reclaimable detected — needs deleted/overwritten files to flag)");
-      }
+      const session = await adapter.parse({ tool: "claude-code", locator });
+      const cost = analyzeSessionCost(session);
+      const pricing = pricingFor(session.messages.find((m) => m.model)?.model);
+      const model = session.messages.find((m) => m.model)?.model ?? "—";
+      const { snapshot, report } = await analyzeSessionReclaimable(session, {
+        repo: new FsRepoState(),
+        tokens,
+        ...(pricing ? { pricing } : {}),
+      });
+
+      renderHeader({
+        sessionId: session.id,
+        projectPath: session.projectPath,
+        gitBranch: session.gitBranch,
+        toolVersion: session.toolVersion,
+        startedAt: session.startedAt,
+        endedAt: session.endedAt,
+        messageCount: session.messages.length,
+        turnCount: session.turns.length,
+        toolCallCount: session.toolCalls.length,
+        fileOpCount: session.fileOps.length,
+        memoryOpCount: session.memoryOps.length,
+      }, model);
+
+      renderStats([
+        { label: "session cost",    value: fmtUsd(cost.totalUsd),                           sub: "actuals · exact" },
+        { label: "context window",  value: fmtTok(snapshot.totalTokens) + " tok",            sub: `${snapshot.segments.length} segments` },
+        { label: "reclaimable",     value: fmtPct(report.reclaimablePct),                    sub: `${fmtInt(report.reclaimableTokens)} tokens` },
+        { label: "wasted / turn",   value: report.wastedUsdPerTurn !== null ? fmtUsd(report.wastedUsdPerTurn) : "—", sub: `${session.turns.length} turns` },
+      ]);
+
+      renderXray(composition(snapshot), snapshot.totalTokens);
+      renderCost({
+        totalUsd: cost.totalUsd,
+        inputUsd: cost.breakdown.inputUsd,
+        outputUsd: cost.breakdown.outputUsd,
+        cacheReadUsd: cost.breakdown.cacheReadUsd,
+        cacheWriteUsd: cost.breakdown.cacheWriteUsd,
+        cacheSavingsUsd: cost.cacheSavingsUsd,
+        unpricedMessages: cost.unpricedMessages,
+      });
+      renderReclaimable({
+        reclaimableTokens: report.reclaimableTokens,
+        reclaimablePct: report.reclaimablePct,
+        wastedUsdPerTurn: report.wastedUsdPerTurn,
+        byStatus: report.byStatus as Record<string, number>,
+        items: report.items.slice(0, 12),
+      }, snapshot.totalTokens);
       return 0;
     }
 
@@ -150,18 +220,7 @@ async function main(argv: string[]): Promise<number> {
           ...(projectPath ? { projectPath } : {}),
           ...(limit ? { limit: Number(limit) } : {}),
         });
-        if (rows.length === 0) {
-          console.log("index empty — run `glassbox index` first.");
-          return 0;
-        }
-        for (const m of rows) {
-          console.log(
-            `${m.endedAt}  ${m.sessionId.slice(0, 8)}  ` +
-              `${String(m.messageCount).padStart(4)} msg ${String(m.toolCallCount).padStart(3)} tool ` +
-              `${String(m.memoryOpCount).padStart(2)} mem  ${m.projectPath}`,
-          );
-        }
-        console.log(`(${rows.length} sessions, from the index — no re-parse)`);
+        renderSessions(rows);
       } finally {
         index.close();
       }
@@ -236,26 +295,38 @@ async function main(argv: string[]): Promise<number> {
 
     case "help":
     case "--help":
-    case "-h":
-      console.log(
-        [
-          "glassbox — x-ray & hygiene monitor for AI agent context",
-          "",
-          "commands:",
-          "  glassbox                 index sessions and launch the local inspector",
-          "  serve [--port <n>]       launch the local web inspector",
-          "  list [--project <path>]   discover Claude Code sessions on disk",
-          "  parse <session.jsonl>     parse a session into the normalized model (Phase 1)",
-          "  cost <session.jsonl>      cost from provider actuals + token-estimate accuracy",
-          "  xray <session.jsonl>      context composition by source + reclaimable tokens",
-          "  index [--project <p>]     parse + (incrementally) index sessions into SQLite",
-          "  sessions [--project <p>]  list indexed sessions fast (metadata only, no re-parse)",
-          "  watch [--project <p>]     index, then keep it live on file changes (Ctrl-C to stop)",
-          "",
-          "  (index/sessions/watch take --db <path>; default ~/.glassbox/index.db)",
-        ].join("\n"),
-      );
+    case "-h": {
+      nl();
+      console.log(bold("glassbox") + "  " + gray("x-ray & hygiene monitor for AI agent context"));
+      nl();
+      hr("COMMANDS");
+      nl();
+      const cmds: [string, string][] = [
+        ["glassbox",                       "index sessions and launch the local web inspector"],
+        ["serve [--port <n>]",             "launch the web inspector (default port 4317)"],
+        ["inspect <session.jsonl>",        "full dashboard: stats + x-ray + cost + reclaimable"],
+        ["xray <session.jsonl>",           "context composition by source + reclaimable tokens"],
+        ["cost <session.jsonl>",           "cost breakdown from provider actuals"],
+        ["sessions [--project <p>]",       "list indexed sessions (fast, no re-parse)"],
+        ["index [--project <p>]",          "parse + incrementally index sessions into SQLite"],
+        ["watch [--project <p>]",          "index then keep it live on file changes"],
+        ["list [--project <p>]",           "discover Claude Code sessions on disk"],
+        ["parse <session.jsonl>",          "dump the full normalized model as JSON"],
+      ];
+      const maxCmd = Math.max(...cmds.map(([c]) => c.length));
+      for (const [cmd, desc] of cmds) {
+        const parts = cmd.split(" ");
+        const name = bold(parts[0] ?? "");
+        const args = parts.slice(1).join(" ");
+        const left = `  ${name}${args ? " " + gray(args) : ""}`;
+        const pad  = " ".repeat(Math.max(1, maxCmd - cmd.length + 4));
+        console.log(`${left}${pad}${gray(desc)}`);
+      }
+      nl();
+      console.log(dim("  index/sessions/watch accept --db <path>  (default ~/.glassbox/index.db)"));
+      nl();
       return 0;
+    }
 
     default:
       console.error(`unknown command: ${command}`);
@@ -269,10 +340,6 @@ function flag(args: string[], name: string): string | undefined {
   return i >= 0 ? args[i + 1] : undefined;
 }
 
-/** Format USD with enough precision to show sub-cent agent costs honestly. */
-function usd(n: number): string {
-  return n >= 0.01 || n === 0 ? `$${n.toFixed(4)}` : `$${n.toExponential(2)}`;
-}
 
 /**
  * Resolve the index db path (default `~/.glassbox/index.db`) and ensure its
