@@ -9,6 +9,7 @@ import {
   checkTokenAccuracy,
   composition,
   FsRepoState,
+  plan,
   pricingFor,
 } from "@glassbox/analysis";
 import type { SessionIndex } from "@glassbox/store";
@@ -104,6 +105,7 @@ async function buildDetail(session: Session, tokens: TokenCounter, repo: FsRepoS
     ...(pricing ? { pricing } : {}),
   });
   const accuracy = checkTokenAccuracy(session, tokens);
+  const cleanPlan = plan(report, session);
 
   return {
     meta: {
@@ -173,6 +175,33 @@ async function buildDetail(session: Session, tokens: TokenCounter, repo: FsRepoS
       note: accuracy.note,
       ratio: accuracy.ratio,
       sampleResponses: accuracy.sampleResponses,
+    },
+    clean: {
+      actions: cleanPlan.claudeMdBlocks.map((a) => ({
+        type: a.type,
+        path: a.path,
+        reason: a.reason,
+        reclaimableTokens: a.reclaimableTokens,
+        confidence: a.confidence,
+        claudeMdSnippet: a.claudeMdSnippet,
+      })),
+      compact: cleanPlan.compactRecommendation
+        ? {
+            reclaimablePct: cleanPlan.compactRecommendation.reclaimablePct,
+            reclaimableTokens: cleanPlan.compactRecommendation.reclaimableTokens,
+            spentTokens: cleanPlan.compactRecommendation.spentTokens,
+            duplicateTokens: cleanPlan.compactRecommendation.duplicateTokens,
+            suggestedSummaryFocus: cleanPlan.compactRecommendation.suggestedSummaryFocus,
+            estimatedUsdSaved: cleanPlan.compactRecommendation.estimatedUsdSaved,
+            command: `/compact ${cleanPlan.compactRecommendation.suggestedSummaryFocus}`,
+          }
+        : null,
+      summary: {
+        actionCount: cleanPlan.summary.actionCount,
+        reclaimableTokens: cleanPlan.summary.reclaimableTokens,
+        reclaimablePct: cleanPlan.summary.reclaimablePct,
+        estimatedUsdSaved: cleanPlan.summary.estimatedUsdSaved,
+      },
     },
   };
 }

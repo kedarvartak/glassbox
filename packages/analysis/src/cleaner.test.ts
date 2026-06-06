@@ -8,7 +8,15 @@ import {
   type SegmentStatus,
   type Session,
 } from "@glassbox/core";
-import { plan } from "./cleaner.js";
+import {
+  compactCommand,
+  HYGIENE_END,
+  HYGIENE_START,
+  plan,
+  renderHygieneBlock,
+  suggestedCompactFocus,
+  upsertHygieneBlock,
+} from "./cleaner.js";
 import type { ReclaimableDetail, ReclaimableItem, ReclaimableReport } from "./reclaimable.js";
 
 function item(
@@ -178,5 +186,79 @@ describe("plan — summary", () => {
     expect(p.summary.actionCount).toBe(2);
     expect(p.summary.reclaimableTokens).toBe(350);
     expect(p.summary.estimatedUsdSaved).toBe(0.01);
+  });
+});
+
+describe("upsertHygieneBlock — CLAUDE.md injection (Phase C)", () => {
+  const NOW = new Date("2026-06-06T12:00:00Z");
+  const goneAndDrift = () =>
+    plan(
+      report([
+        item("gone", "gone", 100, { path: "/repo/old.ts" }),
+        item("stale", "stale-drift", 80, { path: "/repo/changed.ts" }),
+      ]),
+      session(),
+    );
+
+  it("renders a block with both deleted and changed sections", () => {
+    const block = renderHygieneBlock(goneAndDrift(), NOW);
+    expect(block.startsWith(HYGIENE_START)).toBe(true);
+    expect(block.endsWith(HYGIENE_END)).toBe(true);
+    expect(block).toContain("do not read or reference");
+    expect(block).toContain("/repo/old.ts");
+    expect(block).toContain("re-read");
+    expect(block).toContain("/repo/changed.ts");
+    expect(block).toContain("2026-06-06T12:00:00Z");
+  });
+
+  it("appends the block to existing user content, preserving it", () => {
+    const existing = "# My project\n\nUse pnpm. Prefer small functions.\n";
+    const out = upsertHygieneBlock(existing, goneAndDrift(), NOW);
+    expect(out).toContain("# My project");
+    expect(out).toContain("Use pnpm.");
+    expect(out).toContain(HYGIENE_START);
+  });
+
+  it("is idempotent — applying twice yields byte-identical output", () => {
+    const existing = "# My project\n\nGuidelines here.\n";
+    const once = upsertHygieneBlock(existing, goneAndDrift(), NOW);
+    const twice = upsertHygieneBlock(once, goneAndDrift(), NOW);
+    expect(twice).toBe(once);
+  });
+
+  it("replaces an out-of-date block rather than stacking a second one", () => {
+    const existing = "# My project\n";
+    const first = upsertHygieneBlock(existing, goneAndDrift(), NOW);
+    // a later plan with a different set of files
+    const laterPlan = plan(report([item("gone", "gone", 50, { path: "/repo/other.ts" })]), session());
+    const second = upsertHygieneBlock(first, laterPlan, NOW);
+    expect(second.match(new RegExp(HYGIENE_START, "g"))).toHaveLength(1);
+    expect(second).toContain("/repo/other.ts");
+    expect(second).not.toContain("/repo/old.ts");
+  });
+
+  it("strips the managed block entirely when the window is clean", () => {
+    const existing = "# My project\n";
+    const withBlock = upsertHygieneBlock(existing, goneAndDrift(), NOW);
+    const cleanPlan = plan(report([item("spent", "spent-tool", 10)], { totalTokens: 1000 }), session());
+    const cleaned = upsertHygieneBlock(withBlock, cleanPlan, NOW);
+    expect(cleaned).not.toContain(HYGIENE_START);
+    expect(cleaned).toContain("# My project");
+  });
+});
+
+describe("compact command (Phase D)", () => {
+  it("builds a /compact slash command from the focus", () => {
+    const focus = suggestedCompactFocus(session([msg("user", "u1", "Fix the parser bug")]));
+    const cmd = compactCommand(focus);
+    expect(cmd.startsWith("/compact ")).toBe(true);
+    expect(cmd).toContain("Fix the parser bug");
+  });
+
+  it("focus matches the one carried in the plan's compact recommendation", () => {
+    const r = report([item("spent", "spent-tool", 400)], { totalTokens: 1000 });
+    const s = session([msg("user", "u1", "Ship the release")]);
+    const p = plan(r, s);
+    expect(p.compactRecommendation?.suggestedSummaryFocus).toBe(suggestedCompactFocus(s));
   });
 });

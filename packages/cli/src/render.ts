@@ -365,6 +365,31 @@ export function renderCleanPlan(plan: CleanPlan, dryRun: boolean): void {
   nl();
 }
 
+/**
+ * Render the ready-to-run `/compact` command. Glassbox is read-only and cannot
+ * compact a finished transcript — this is a command to paste into the *live*
+ * session, optionally pre-copied to the clipboard.
+ */
+export function renderCompactCommand(command: string, opts: { copied: boolean; belowThreshold: boolean }): void {
+  hr("COMPACT COMMAND");
+  nl();
+  if (opts.belowThreshold) {
+    console.log(`  ${dim("note: this window is below the compact threshold — a compact may be premature.")}`);
+    nl();
+  }
+  console.log(`  ${gray("run this inside your")} ${bold("live")} ${gray("Claude Code session:")}`);
+  nl();
+  console.log(`  ${cyan(wrap(command, 2))}`);
+  nl();
+  console.log(
+    opts.copied
+      ? `  ${green("✓ copied to clipboard")}`
+      : `  ${dim("(copy it manually — no clipboard tool found)")}`,
+  );
+  console.log(`  ${dim("Glassbox never compacts for you; it can't mutate a session. This just stages the command.")}`);
+  nl();
+}
+
 /** Soft-wrap a long string with a left indent, for the compact focus line. */
 function wrap(text: string, indent: number): string {
   const pad = " ".repeat(indent);

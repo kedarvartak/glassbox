@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { SessionDetail, SegmentStatus } from "../api.js";
 import { basename, fmtInt, fmtPct, fmtTokens, fmtUsd, sourceColor, statusColor } from "../format.js";
 
@@ -19,6 +20,7 @@ export function SessionView({ d }: { d: SessionDetail }) {
         <CompositionPanel xray={d.xray} />
         <CostPanel cost={d.cost} />
         <ReclaimablePanel r={d.reclaimable} />
+        <HygienePanel clean={d.clean} />
       </div>
     </>
   );
@@ -234,4 +236,130 @@ function ReclaimablePanel({ r }: { r: SessionDetail["reclaimable"] }) {
       </div>
     </section>
   );
+}
+
+function HygienePanel({ clean }: { clean?: SessionDetail["clean"] }) {
+  // Older server builds don't emit `clean`; render nothing rather than crash.
+  if (!clean) return null;
+  const { actions, compact, summary } = clean;
+  const hasWork = actions.length > 0 || compact !== null;
+
+  return (
+    <section className="panel p-full">
+      <div className="panel-header">
+        <span className="panel-title">Context Cleaner</span>
+        <span className="panel-hint">
+          {hasWork
+            ? `${summary.actionCount} file fix${summary.actionCount !== 1 ? "es" : ""}${compact ? " · compact advised" : ""}`
+            : "nothing to clean"}
+        </span>
+      </div>
+      <div className="panel-body">
+        {!hasWork ? (
+          <div className="clean-state">
+            Nothing to clean — no deleted or drifted files, and the window isn’t garbage-heavy enough to compact.
+          </div>
+        ) : (
+          <div className="hyg">
+            {/* CLAUDE.md actions */}
+            {actions.length > 0 && (
+              <div className="hyg-block">
+                <div className="hyg-block-head">
+                  <span className="hyg-block-title">CLAUDE.md fixes</span>
+                  <span className="hyg-block-sub">tell the agent which files to stop trusting</span>
+                </div>
+                <div className="hyg-actions">
+                  {actions.map((a, i) => (
+                    <div className="hyg-action" key={i}>
+                      <span className={`hyg-verb ${a.type}`}>
+                        {a.type === "stop_referencing" ? "STOP" : "RE-READ"}
+                      </span>
+                      <div className="hyg-action-body">
+                        <div className="hyg-action-path">{a.path}</div>
+                        <div className="hyg-action-reason">{a.reason}</div>
+                      </div>
+                      <span className="hyg-action-tok">{fmtTokens(a.reclaimableTokens)}</span>
+                    </div>
+                  ))}
+                </div>
+                <CopyButton
+                  label="Copy CLAUDE.md block"
+                  text={buildClaudeMdBlock(actions)}
+                />
+              </div>
+            )}
+
+            {/* Compact recommendation */}
+            {compact && (
+              <div className="hyg-block">
+                <div className="hyg-block-head">
+                  <span className="hyg-block-title">Compact recommended</span>
+                  <span className="hyg-block-sub">
+                    window is {fmtPct(compact.reclaimablePct)} reclaimable
+                  </span>
+                </div>
+                <div className="hyg-compact-stats">
+                  <div className="hyg-cstat">
+                    <span className="hyg-cstat-k">spent</span>
+                    <span className="hyg-cstat-v">{fmtTokens(compact.spentTokens)}</span>
+                  </div>
+                  <div className="hyg-cstat">
+                    <span className="hyg-cstat-k">duplicate</span>
+                    <span className="hyg-cstat-v">{fmtTokens(compact.duplicateTokens)}</span>
+                  </div>
+                  {compact.estimatedUsdSaved !== null && (
+                    <div className="hyg-cstat">
+                      <span className="hyg-cstat-k">stops wasting</span>
+                      <span className="hyg-cstat-v pos">~{fmtUsd(compact.estimatedUsdSaved)}/turn</span>
+                    </div>
+                  )}
+                </div>
+                <div className="hyg-compact-cmd">{compact.command}</div>
+                <div className="hyg-note">
+                  Run this inside your live Claude Code session — Glassbox can’t compact for you.
+                </div>
+                <CopyButton label="Copy /compact command" text={compact.command} />
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function CopyButton({ label, text }: { label: string; text: string }) {
+  const [copied, setCopied] = useState(false);
+  const onCopy = () => {
+    navigator.clipboard?.writeText(text).then(
+      () => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      },
+      () => setCopied(false),
+    );
+  };
+  return (
+    <button className="hyg-copy" onClick={onCopy} type="button">
+      {copied ? "✓ Copied" : label}
+    </button>
+  );
+}
+
+function buildClaudeMdBlock(actions: SessionDetail["clean"]["actions"]): string {
+  const stop = actions.filter((a) => a.type === "stop_referencing");
+  const reread = actions.filter((a) => a.type === "re_read");
+  const lines: string[] = [
+    "<!-- glassbox:hygiene:start -->",
+    "## Context hygiene — Glassbox",
+    "These files drifted from or left the workspace after they entered context.",
+  ];
+  if (stop.length > 0) {
+    lines.push("", "**Deleted — do not read or reference:**", ...stop.map((a) => a.claudeMdSnippet));
+  }
+  if (reread.length > 0) {
+    lines.push("", "**Changed on disk — re-read before relying on the cached copy:**", ...reread.map((a) => a.claudeMdSnippet));
+  }
+  lines.push("<!-- glassbox:hygiene:end -->");
+  return lines.join("\n");
 }

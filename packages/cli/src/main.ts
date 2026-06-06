@@ -1,6 +1,8 @@
 #!/usr/bin/env node
-import { mkdirSync } from "node:fs";
-import { homedir } from "node:os";
+import { spawn } from "node:child_process";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { createInterface } from "node:readline/promises";
+import { homedir, platform } from "node:os";
 import { dirname, join } from "node:path";
 import { ClaudeCodeAdapter, claudeProjectsRoot } from "@glassbox/adapter-claude-code";
 import {
@@ -10,8 +12,11 @@ import {
   composition,
   FsRepoState,
   PRICING_AS_OF,
+  compactCommand,
   plan,
   pricingFor,
+  suggestedCompactFocus,
+  upsertHygieneBlock,
 } from "@glassbox/analysis";
 import { SessionIndex, SessionIndexer } from "@glassbox/store";
 import { startServer, uiIsBuilt } from "./server.js";
@@ -20,7 +25,7 @@ import {
   bold, dim, gray, green, yellow, red, nl, hr,
   fmtUsd, fmtTok, fmtPct, fmtInt,
   renderHeader, renderStats, renderXray, renderCost, renderReclaimable, renderSessions,
-  renderCleanPlan,
+  renderCleanPlan, renderCompactCommand,
 } from "./render.js";
 
 /**
@@ -199,7 +204,7 @@ async function main(argv: string[]): Promise<number> {
     case "clean": {
       const locator = rest[0];
       if (!locator) {
-        console.error("usage: glassbox clean <session.jsonl> [--json]");
+        console.error("usage: glassbox clean <session.jsonl> [--apply] [--yes] [--json]");
         return 2;
       }
       const session = await adapter.parse({ tool: "claude-code", locator });
@@ -217,6 +222,10 @@ async function main(argv: string[]): Promise<number> {
         return 0;
       }
 
+      const apply = rest.includes("--apply");
+      const doCompact = rest.includes("--compact");
+      const assumeYes = rest.includes("--yes") || rest.includes("-y");
+
       renderHeader({
         sessionId: session.id,
         projectPath: session.projectPath,
@@ -231,8 +240,47 @@ async function main(argv: string[]): Promise<number> {
         memoryOpCount: session.memoryOps.length,
       }, model);
 
-      // Phase B: read-only dry run. --apply (write) lands in Phase C.
-      renderCleanPlan(cleanPlan, true);
+      renderCleanPlan(cleanPlan, !apply && !doCompact);
+
+      // ── Phase C: write the CLAUDE.md hygiene block (user-confirmed) ──
+      if (apply) {
+        if (cleanPlan.claudeMdBlocks.length === 0) {
+          console.log(gray("  nothing to write — no file-level fixes in this plan."));
+        } else {
+          const claudeMdPath = join(session.projectPath, "CLAUDE.md");
+          const existing = safeRead(claudeMdPath);
+          const next = upsertHygieneBlock(existing, cleanPlan, new Date());
+          if (next === existing) {
+            console.log(green("  ✓ CLAUDE.md already up to date — nothing to write."));
+          } else {
+            console.log(`  ${bold("Target:")} ${claudeMdPath}`);
+            console.log(`  ${dim(existing.trim() === "" ? "(new file)" : "appends/updates a managed Glassbox block; your content is untouched")}`);
+            nl();
+            const ok = assumeYes || await confirm(`  Write ${cleanPlan.claudeMdBlocks.length} hygiene line(s) to CLAUDE.md?`);
+            if (ok) {
+              writeFileSync(claudeMdPath, next, "utf8");
+              console.log(green(`  ✓ wrote hygiene block to ${claudeMdPath}`));
+            } else {
+              console.log(gray("  aborted — no changes written."));
+            }
+          }
+          nl();
+        }
+      }
+
+      // ── Phase D: stage the /compact command (read-only — never auto-run) ──
+      if (doCompact) {
+        const focus = cleanPlan.compactRecommendation?.suggestedSummaryFocus
+          ?? suggestedCompactFocus(session);
+        const command = compactCommand(focus);
+        const copied = assumeYes || await confirm("  Copy the /compact command to your clipboard?")
+          ? await copyToClipboard(command)
+          : false;
+        renderCompactCommand(command, {
+          copied,
+          belowThreshold: cleanPlan.compactRecommendation === undefined,
+        });
+      }
       return 0;
     }
 
@@ -349,7 +397,7 @@ async function main(argv: string[]): Promise<number> {
         ["inspect <session.jsonl>",        "full dashboard: stats + x-ray + cost + reclaimable"],
         ["xray <session.jsonl>",           "context composition by source + reclaimable tokens"],
         ["cost <session.jsonl>",           "cost breakdown from provider actuals"],
-        ["clean <session.jsonl>",          "dry-run hygiene plan: CLAUDE.md fixes + compact advice"],
+        ["clean <session.jsonl>",          "hygiene plan; --apply writes CLAUDE.md, --compact stages /compact"],
         ["sessions [--project <p>]",       "list indexed sessions (fast, no re-parse)"],
         ["index [--project <p>]",          "parse + incrementally index sessions into SQLite"],
         ["watch [--project <p>]",          "index then keep it live on file changes"],
@@ -381,6 +429,54 @@ async function main(argv: string[]): Promise<number> {
 function flag(args: string[], name: string): string | undefined {
   const i = args.indexOf(name);
   return i >= 0 ? args[i + 1] : undefined;
+}
+
+/** Read a file, returning "" if it doesn't exist (the CLAUDE.md-may-be-new case). */
+function safeRead(path: string): string {
+  try {
+    return readFileSync(path, "utf8");
+  } catch {
+    return "";
+  }
+}
+
+/** Interactive y/N confirmation. Defaults to No on empty input or non-TTY. */
+async function confirm(question: string): Promise<boolean> {
+  if (!process.stdin.isTTY) return false;
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    const answer = (await rl.question(`${question} ${dim("[y/N]")} `)).trim().toLowerCase();
+    return answer === "y" || answer === "yes";
+  } finally {
+    rl.close();
+  }
+}
+
+/**
+ * Best-effort copy to the system clipboard. Tries the platform's native tool;
+ * returns false if none is available (the caller then tells the user to copy
+ * manually). Never throws.
+ */
+function copyToClipboard(text: string): Promise<boolean> {
+  const candidates: [string, string[]][] =
+    platform() === "darwin"
+      ? [["pbcopy", []]]
+      : platform() === "win32"
+        ? [["clip", []]]
+        : [["wl-copy", []], ["xclip", ["-selection", "clipboard"]], ["xsel", ["--clipboard", "--input"]]];
+
+  return new Promise((resolve) => {
+    const tryNext = (i: number): void => {
+      const entry = candidates[i];
+      if (!entry) return resolve(false);
+      const [cmd, args] = entry;
+      const child = spawn(cmd, args, { stdio: ["pipe", "ignore", "ignore"] });
+      child.on("error", () => tryNext(i + 1));
+      child.on("close", (code) => (code === 0 ? resolve(true) : tryNext(i + 1)));
+      child.stdin.end(text);
+    };
+    tryNext(0);
+  });
 }
 
 

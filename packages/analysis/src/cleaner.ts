@@ -127,7 +127,7 @@ export function plan(report: ReclaimableReport, session: Session, opts: CleanOpt
       reclaimableTokens: report.reclaimableTokens,
       spentTokens,
       duplicateTokens,
-      suggestedSummaryFocus: buildSummaryFocus(session),
+      suggestedSummaryFocus: suggestedCompactFocus(session),
       estimatedUsdSaved:
         report.wastedUsdPerTurn !== null ? report.wastedUsdPerTurn * compactableShare : null,
     };
@@ -178,9 +178,10 @@ function buildAction(type: CleanActionType, path: string, tokens: number): Clean
  * Build a `/compact` focus suggestion from the session's most recent intent —
  * the last real user prompt plus the latest assistant reply. This tells the
  * agent what to preserve when it summarizes, so the compact keeps the live task
- * and drops the spent bulk.
+ * and drops the spent bulk. Pure; exported so the CLI's compact action (Phase D)
+ * can build a command even when the plan is below the compact threshold.
  */
-function buildSummaryFocus(session: Session): string {
+export function suggestedCompactFocus(session: Session): string {
   const lastUser = lastTextByRole(session, "user");
   const lastAssistant = lastTextByRole(session, "assistant");
   const parts: string[] = [];
@@ -188,6 +189,16 @@ function buildSummaryFocus(session: Session): string {
   if (lastAssistant) parts.push(`recent progress: ${truncate(lastAssistant, 160)}`);
   if (parts.length === 0) return "Preserve the current task and recent file edits; drop spent tool output.";
   return `Preserve — ${parts.join("; ")}. Drop spent tool output and old file copies.`;
+}
+
+/**
+ * The exact Claude Code slash command to compact with a given focus. Glassbox
+ * never runs this — compaction is a live, in-session action and we're read-only
+ * on transcripts — so the cleaner's job ends at producing the command for the
+ * user to paste into their running session (doc 21 §4, §5.3).
+ */
+export function compactCommand(focus: string): string {
+  return `/compact ${focus}`;
 }
 
 function lastTextByRole(session: Session, role: "user" | "assistant"): string | null {
@@ -207,4 +218,79 @@ function lastTextByRole(session: Session, role: "user" | "assistant"): string | 
 function truncate(s: string, max: number): string {
   const oneLine = s.replace(/\s+/g, " ").trim();
   return oneLine.length > max ? `${oneLine.slice(0, max - 1)}…` : oneLine;
+}
+
+// ───────────────────────── CLAUDE.md injection (Phase C) ─────────────────────────
+
+/**
+ * Markers that bound Glassbox's managed region in CLAUDE.md. Everything between
+ * them is owned by the cleaner and rewritten on each `--apply`; everything
+ * outside is the user's and never touched. The markers are what make the write
+ * idempotent — we replace the block in place rather than appending a new one.
+ */
+export const HYGIENE_START = "<!-- glassbox:hygiene:start -->";
+export const HYGIENE_END = "<!-- glassbox:hygiene:end -->";
+
+/**
+ * Render the managed CLAUDE.md hygiene block for a plan (doc 21 §5.2). Pure —
+ * the timestamp is injected so the output is deterministic and testable. The
+ * block instructs the agent which resident files to stop trusting; the compact
+ * recommendation is intentionally *not* written here (it's a runtime action,
+ * not durable memory).
+ */
+export function renderHygieneBlock(plan: CleanPlan, now: Date): string {
+  const stop = plan.claudeMdBlocks.filter((a) => a.type === "stop_referencing");
+  const reread = plan.claudeMdBlocks.filter((a) => a.type === "re_read");
+
+  const lines: string[] = [
+    HYGIENE_START,
+    `## Context hygiene — Glassbox ${now.toISOString().slice(0, 19)}Z`,
+    `These files drifted from or left the workspace after they entered context.`,
+  ];
+  if (stop.length > 0) {
+    lines.push("", "**Deleted — do not read or reference:**");
+    for (const a of stop) lines.push(a.claudeMdSnippet);
+  }
+  if (reread.length > 0) {
+    lines.push("", "**Changed on disk — re-read before relying on the cached copy:**");
+    for (const a of reread) lines.push(a.claudeMdSnippet);
+  }
+  lines.push(HYGIENE_END);
+  return lines.join("\n");
+}
+
+/**
+ * Insert-or-replace the Glassbox hygiene block in CLAUDE.md content,
+ * idempotently (doc 21 §5.2). Running this twice with the same plan + timestamp
+ * yields byte-identical output — the markers guarantee we never stack blocks.
+ *
+ *  - Plan has actions, existing block present → replace it in place.
+ *  - Plan has actions, no block → append (separated by a blank line).
+ *  - Plan has no actions → strip any existing block (the window is clean now).
+ *
+ * Returns the full new CLAUDE.md content. Pure: callers own the file I/O.
+ */
+export function upsertHygieneBlock(existing: string, plan: CleanPlan, now: Date): string {
+  const stripped = stripHygieneBlock(existing);
+
+  // No file-level actions → leave the file with no managed block.
+  if (plan.claudeMdBlocks.length === 0) return stripped;
+
+  const block = renderHygieneBlock(plan, now);
+  if (stripped.trim() === "") return block + "\n";
+  return `${stripped.replace(/\s+$/, "")}\n\n${block}\n`;
+}
+
+/** Remove an existing Glassbox block (and its surrounding blank lines) if present. */
+function stripHygieneBlock(content: string): string {
+  const start = content.indexOf(HYGIENE_START);
+  if (start === -1) return content;
+  const endMarker = content.indexOf(HYGIENE_END, start);
+  if (endMarker === -1) return content; // malformed; leave untouched
+  const end = endMarker + HYGIENE_END.length;
+  const before = content.slice(0, start).replace(/\s+$/, "");
+  const after = content.slice(end).replace(/^\s+/, "");
+  if (before === "" ) return after;
+  if (after === "") return before;
+  return `${before}\n\n${after}`;
 }
