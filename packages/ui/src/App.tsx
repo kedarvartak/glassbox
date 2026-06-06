@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api, type SessionDetail, type SessionListItem } from "./api.js";
 import { SessionView } from "./components/SessionView.js";
-import { basename, relativeTime } from "./format.js";
+import { basename, fmtInt, fmtPct, fmtTokens, fmtUsd, relativeTime } from "./format.js";
 
 export function App() {
   const [sessions, setSessions] = useState<SessionListItem[] | null>(null);
@@ -33,116 +33,168 @@ export function App() {
     return () => { live = false; };
   }, [selected]);
 
-  const selectedSession = sessions?.find((s) => s.locator === selected) ?? null;
-
   return (
-    <div className="app">
-      <header className="topbar">
-        <div className="topbar-brand">
-          <svg xmlns="http://www.w3.org/2000/svg" width="40" height="31" viewBox="0 0 50 39" fill="none">
-            <path d="M16.4992 2H37.5808L22.0816 24.9729H1L16.4992 2Z" fill="#007AFF"/>
-            <path d="M17.4231 27.1022L11.4199 36.0002H33.5015L49.0007 13.0273H32.7031L23.2071 27.1022H17.4231Z" fill="#312ECB"/>
-          </svg>
+    <div className="term">
+      <Hud
+        sessions={sessions}
+        selected={selected}
+        onSelect={setSelected}
+        detail={detail}
+      />
+      {error ? (
+        <div className="screen-center">
+          <div><div className="err">SIGNAL LOST</div>{error}</div>
         </div>
-
-        <div className="topbar-sep" />
-
-        {sessions && sessions.length > 0 && (
-          <SessionPicker
-            sessions={sessions}
-            selected={selected}
-            onSelect={setSelected}
-            current={selectedSession}
-          />
-        )}
-
-        <div className="topbar-right">
-          <span className="topbar-badge">{sessions?.length ?? 0} sessions</span>
-          <span className="topbar-dot" title="local · read-only" />
+      ) : !sessions ? (
+        <div className="screen-center"><div><div className="spin" />READING INDEX…</div></div>
+      ) : sessions.length === 0 ? (
+        <div className="screen-center">
+          <div>NO SESSIONS INDEXED — run <span className="amber">glassbox index</span> first.</div>
         </div>
-      </header>
-
-      <div className="app-body">
-        {error ? (
-          <div className="fullscreen-center">
-            <div><div className="err-msg">failed to load</div>{error}</div>
-          </div>
-        ) : !sessions ? (
-          <div className="fullscreen-center">
-            <div><div className="spin" />reading index…</div>
-          </div>
-        ) : sessions.length === 0 ? (
-          <div className="fullscreen-center">
-            <div>no sessions indexed — run <code>glassbox index</code> first.</div>
-          </div>
-        ) : loadingDetail || !detail ? (
-          <div className="fullscreen-center">
-            <div><div className="spin" />analyzing session…</div>
-          </div>
-        ) : (
-          <div className="dashboard">
-            <SessionView d={detail} />
-          </div>
-        )}
-      </div>
+      ) : loadingDetail || !detail ? (
+        <div className="screen-center"><div><div className="spin" />ANALYZING SESSION…</div></div>
+      ) : (
+        <SessionView d={detail} />
+      )}
     </div>
   );
 }
 
-interface PickerProps {
+function Hud({
+  sessions, selected, onSelect, detail,
+}: {
+  sessions: SessionListItem[] | null;
+  selected: string | null;
+  onSelect: (l: string) => void;
+  detail: SessionDetail | null;
+}) {
+  const m = detail?.meta;
+  const cur = sessions?.find((s) => s.locator === selected) ?? null;
+  const model = detail?.cost.models.map((x) => x.model).join(",").split(",")[0]?.replace(/<[^>]+>/g, "") ?? "—";
+  const reclPct = detail?.reclaimable.reclaimablePct ?? 0;
+
+  return (
+    <header className="hud">
+      <div className="hud-top">
+        <div className="hud-logo">
+          <svg xmlns="http://www.w3.org/2000/svg" width="30" height="23" viewBox="0 0 50 39" fill="none">
+            <path d="M16.4992 2H37.5808L22.0816 24.9729H1L16.4992 2Z" fill="#007AFF"/>
+            <path d="M17.4231 27.1022L11.4199 36.0002H33.5015L49.0007 13.0273H32.7031L23.2071 27.1022H17.4231Z" fill="#312ECB"/>
+          </svg>
+        </div>
+        <div className="hud-symwrap">
+          <span className="hud-prompt">&gt;</span>
+          {sessions && sessions.length > 0 && (
+            <SessionMenu sessions={sessions} selected={selected} onSelect={onSelect} />
+          )}
+        </div>
+        <div className="hud-meta">
+          {model !== "—" && <span><b>{model}</b></span>}
+          {m?.gitBranch && <span>BR <b>{m.gitBranch}</b></span>}
+          {cur && <span>{cur.projectPath}</span>}
+        </div>
+        <div className="hud-live"><span className="dot" />LIVE · LOCAL</div>
+      </div>
+
+      <div className="hud-quotes">
+        <Quote k="Cost" v={detail ? fmtUsd(detail.cost.totalUsd) : "—"} cls="amber" sub="provider actuals" />
+        <Quote k="Context" v={detail ? fmtTokens(detail.xray.totalTokens) : "—"} sub={detail ? `${detail.xray.segmentCount} segments` : ""} />
+        <Quote
+          k="Reclaim"
+          v={detail ? fmtPct(reclPct) : "—"}
+          cls={reclPct > 0.25 ? "red" : reclPct > 0.1 ? "amber" : "green"}
+          sub={detail ? `${fmtInt(detail.reclaimable.reclaimableTokens)} tok` : ""}
+        />
+        <Quote
+          k="Waste/Turn"
+          v={detail?.reclaimable.wastedUsdPerTurn != null ? fmtUsd(detail.reclaimable.wastedUsdPerTurn) : "—"}
+          cls="red"
+          sub="recarried/turn"
+        />
+        <Quote k="Turns" v={m ? fmtInt(m.turnCount) : "—"} sub={m ? `${m.messageCount} msgs` : ""} />
+        <Quote k="Tools" v={m ? fmtInt(m.toolCallCount) : "—"} sub={m ? `${m.fileOpCount} file ops` : ""} />
+        <Quote k="Fixes" v={detail ? fmtInt(detail.clean?.summary.actionCount ?? 0) : "—"} cls="amber" sub={detail?.clean?.compact ? "+compact" : "hygiene"} />
+      </div>
+    </header>
+  );
+}
+
+function SessionMenu({
+  sessions,
+  selected,
+  onSelect,
+}: {
   sessions: SessionListItem[];
   selected: string | null;
   onSelect: (locator: string) => void;
-  current: SessionListItem | null;
-}
-
-function SessionPicker({ sessions, selected, onSelect, current }: PickerProps) {
+}) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const current = sessions.find((s) => s.locator === selected) ?? sessions[0] ?? null;
 
   useEffect(() => {
-    function onClickOutside(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    function closeOnOutside(event: MouseEvent) {
+      if (ref.current && !ref.current.contains(event.target as Node)) setOpen(false);
     }
-    document.addEventListener("mousedown", onClickOutside);
-    return () => document.removeEventListener("mousedown", onClickOutside);
+    document.addEventListener("mousedown", closeOnOutside);
+    return () => document.removeEventListener("mousedown", closeOnOutside);
   }, []);
 
-  const name = current ? basename(current.projectPath) || current.sessionId.slice(0, 8) : "—";
-  const ago  = current ? relativeTime(current.endedAt) : "";
+  const currentName = current ? (basename(current.projectPath) || current.sessionId.slice(0, 8)).toUpperCase() : "NO SESSION";
 
   return (
-    <div className="sp" ref={ref}>
-      <button className={`sp-trigger${open ? " open" : ""}`} onClick={() => setOpen((v) => !v)} type="button">
-        <div className="sp-trigger-inner">
-          <span className="sp-name">{name}</span>
-          <span className="sp-meta">{ago}{current ? ` · ${current.messageCount} msgs` : ""}</span>
-        </div>
-        <svg className="sp-caret" width="10" height="6" viewBox="0 0 10 6" fill="none">
-          <path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-        </svg>
+    <div className="session-menu" ref={ref}>
+      <button
+        className={`session-trigger${open ? " open" : ""}`}
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+      >
+        <span className="session-trigger-main">{currentName}</span>
+        {current && (
+          <span className="session-trigger-meta">{relativeTime(current.endedAt)} · {current.messageCount}MSG</span>
+        )}
+        <span className="session-caret" aria-hidden="true" />
       </button>
 
       {open && (
-        <div className="sp-dropdown">
-          {sessions.map((s) => {
-            const n = basename(s.projectPath) || s.sessionId.slice(0, 8);
-            const t = relativeTime(s.endedAt);
-            const active = s.locator === selected;
+        <div className="session-popover" role="listbox">
+          {sessions.map((session) => {
+            const active = session.locator === selected;
+            const name = (basename(session.projectPath) || session.sessionId.slice(0, 8)).toUpperCase();
             return (
               <button
-                key={s.locator}
-                className={`sp-option${active ? " active" : ""}`}
-                onClick={() => { onSelect(s.locator); setOpen(false); }}
+                className={`session-option${active ? " active" : ""}`}
+                key={session.locator}
+                role="option"
+                aria-selected={active}
                 type="button"
+                onClick={() => {
+                  onSelect(session.locator);
+                  setOpen(false);
+                }}
               >
-                <span className="sp-opt-name">{n}</span>
-                <span className="sp-opt-meta">{t} · {s.messageCount} msgs · {s.toolCallCount} tools</span>
+                <span className="session-option-name">{name}</span>
+                <span className="session-option-meta">
+                  {relativeTime(session.endedAt)} · {session.messageCount}MSG · {session.toolCallCount}TOOLS
+                </span>
+                <span className="session-option-path">{session.projectPath}</span>
               </button>
             );
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+function Quote({ k, v, cls, sub }: { k: string; v: string; cls?: string; sub?: string }) {
+  return (
+    <div className="quote">
+      <span className="quote-k">{k}</span>
+      <span className={`quote-v${cls ? " " + cls : ""}`}>{v}</span>
+      {sub && <span className="quote-sub">{sub}</span>}
     </div>
   );
 }
