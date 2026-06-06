@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { SessionDetail, SegmentStatus } from "../api.js";
 import { fmtInt, fmtPct, fmtTokens, fmtUsd, statusColor } from "../format.js";
+import { Tip, TipChip } from "./Tooltip.js";
 
 const STATUSES: SegmentStatus[] = ["gone", "stale", "spent", "duplicate"];
 
@@ -35,9 +36,9 @@ export function SessionView({ d }: { d: SessionDetail }) {
 
 /* ════════════════ charts ════════════════ */
 
-function Donut({ data, size = 104, thick = 16 }: {
-  data: { value: number; color: string }[];
-  size?: number; thick?: number;
+function Donut({ data, size = 104, thick = 16, unit = "tok", money = false }: {
+  data: { value: number; color: string; label?: string }[];
+  size?: number; thick?: number; unit?: string; money?: boolean;
 }) {
   const total = data.reduce((s, x) => s + x.value, 0) || 1;
   const r = (size - thick) / 2;
@@ -50,13 +51,22 @@ function Donut({ data, size = 104, thick = 16 }: {
         {data.filter((x) => x.value > 0).map((x, i) => {
           const len = (x.value / total) * c;
           const seg = (
-            <circle
+            <Tip
               key={i}
-              cx={size / 2} cy={size / 2} r={r}
-              fill="none" stroke={x.color} strokeWidth={thick}
-              strokeDasharray={`${len} ${c - len}`}
-              strokeDashoffset={-offset}
-            />
+              svg
+              content={<TipChip title={x.label} rows={[
+                { sw: x.color, k: money ? "cost" : unit, v: money ? fmtUsd(x.value) : `${fmtInt(x.value)} ${unit}` },
+                { k: "share", v: fmtPct(x.value / total) },
+              ]} />}
+            >
+              <circle
+                cx={size / 2} cy={size / 2} r={r}
+                fill="none" stroke={x.color} strokeWidth={thick}
+                strokeDasharray={`${len} ${c - len}`}
+                strokeDashoffset={-offset}
+                style={{ cursor: "pointer" }}
+              />
+            </Tip>
           );
           offset += len;
           return seg;
@@ -100,22 +110,40 @@ function CompositionPanel({ xray }: { xray: SessionDetail["xray"] }) {
       <div className="pnl-body">
         <div className="comp-stack">
           {xray.composition.map((c) => (
-            <span key={c.source} style={{ width: `${(c.tokens / total) * 100}%`, background: srcHex(c.source) }}
-              title={`${c.source} · ${fmtInt(c.tokens)}`} />
+            <Tip key={c.source} content={<TipChip title={c.source} rows={[
+              { sw: srcHex(c.source), k: "tokens", v: fmtInt(c.tokens) },
+              { k: "share", v: fmtPct(c.tokens / total) },
+            ]} />}>
+              <span style={{ display: "block", height: "100%", width: `${(c.tokens / total) * 100}%`, background: srcHex(c.source) }} />
+            </Tip>
           ))}
         </div>
-        <div className="comp-list">
-          {xray.composition.map((c) => (
-            <div className="comp-row" key={c.source}>
-              <span className="comp-sw" style={{ background: srcHex(c.source) }} />
-              <span className="comp-src">{c.source}</span>
-              <span className="comp-track">
-                <span className="comp-fill" style={{ width: `${(c.tokens / max) * 100}%`, background: srcHex(c.source) }} />
-              </span>
-              <span className="comp-tok">{fmtTokens(c.tokens)}</span>
-              <span className="comp-pct">{fmtPct(c.tokens / total)}</span>
+        <div className="comp-split">
+          <div className="donut-wrap">
+            <Donut data={xray.composition.map((c) => ({ value: c.tokens, color: srcHex(c.source), label: c.source }))} size={150} thick={22} />
+            <div className="donut-center">
+              <span className="big">{fmtTokens(xray.totalTokens)}</span>
+              <span className="lbl">tokens</span>
             </div>
-          ))}
+          </div>
+          <div className="comp-list">
+            {xray.composition.map((c) => (
+              <Tip key={c.source} content={<TipChip title={c.source} rows={[
+                { sw: srcHex(c.source), k: "tokens", v: fmtInt(c.tokens) },
+                { k: "share", v: fmtPct(c.tokens / total) },
+              ]} />}>
+                <div className="comp-row">
+                  <span className="comp-sw" style={{ background: srcHex(c.source) }} />
+                  <span className="comp-src">{c.source}</span>
+                  <span className="comp-track">
+                    <span className="comp-fill" style={{ width: `${(c.tokens / max) * 100}%`, background: srcHex(c.source) }} />
+                  </span>
+                  <span className="comp-tok">{fmtTokens(c.tokens)}</span>
+                  <span className="comp-pct">{fmtPct(c.tokens / total)}</span>
+                </div>
+              </Tip>
+            ))}
+          </div>
         </div>
       </div>
     </>
@@ -134,7 +162,7 @@ function CostPanel({ cost }: { cost: SessionDetail["cost"] }) {
       <div className="pnl-body">
         <div className="chart-row">
           <div className="donut-wrap">
-            <Donut data={parts.map((p) => ({ value: p.usd, color: p.color }))} />
+            <Donut money data={parts.map((p) => ({ value: p.usd, color: p.color, label: p.key }))} />
             <div className="donut-center">
               <span className="big">{fmtUsd(cost.totalUsd)}</span>
               <span className="lbl">total</span>
@@ -142,12 +170,17 @@ function CostPanel({ cost }: { cost: SessionDetail["cost"] }) {
           </div>
           <div className="legend">
             {parts.map((p) => (
-              <div className="legend-row" key={p.key}>
-                <span className="legend-sw" style={{ background: p.color }} />
-                <span className="legend-k">{p.key}</span>
-                <span className="legend-v">{fmtUsd(p.usd)}</span>
-                <span className="legend-p">{fmtPct(p.usd / total)}</span>
-              </div>
+              <Tip key={p.key} content={<TipChip title={p.key} rows={[
+                { sw: p.color, k: "cost", v: fmtUsd(p.usd) },
+                { k: "share", v: fmtPct(p.usd / total) },
+              ]} />}>
+                <div className="legend-row">
+                  <span className="legend-sw" style={{ background: p.color }} />
+                  <span className="legend-k">{p.key}</span>
+                  <span className="legend-v">{fmtUsd(p.usd)}</span>
+                  <span className="legend-p">{fmtPct(p.usd / total)}</span>
+                </div>
+              </Tip>
             ))}
           </div>
         </div>
@@ -171,7 +204,13 @@ function ReclaimablePanel({ r }: { r: SessionDetail["reclaimable"] }) {
       </div>
       <div className="pnl-body">
         <div className="gauge-wrap">
-          <Gauge pct={r.reclaimablePct} color={pctColor} />
+          <Tip content={<TipChip title="reclaimable" rows={[
+            { k: "share", v: fmtPct(r.reclaimablePct) },
+            { k: "tokens", v: `${fmtInt(r.reclaimableTokens)} / ${fmtInt(r.totalTokens)}` },
+            ...(r.wastedUsdPerTurn != null ? [{ k: "waste/turn", v: fmtUsd(r.wastedUsdPerTurn) }] : []),
+          ]} />}>
+            <Gauge pct={r.reclaimablePct} color={pctColor} />
+          </Tip>
           <div className="gauge-info">
             <span className="gauge-big" style={{ color: pctColor }}>{fmtPct(r.reclaimablePct)}</span>
             <span className="gauge-sub">{fmtTokens(r.reclaimableTokens)} of {fmtTokens(r.totalTokens)} tok</span>
@@ -182,15 +221,20 @@ function ReclaimablePanel({ r }: { r: SessionDetail["reclaimable"] }) {
         </div>
         <div className="statbars">
           {STATUSES.map((s) => (
-            <div className="statbar" key={s}>
-              <span className="statbar-k" style={{ color: STATUS_HEX[s] }}>
-                <span className="d" style={{ background: STATUS_HEX[s] }} />{s}
-              </span>
-              <span className="statbar-track">
-                <span className="statbar-fill" style={{ width: `${(r.byStatus[s] / maxStatus) * 100}%`, background: STATUS_HEX[s] }} />
-              </span>
-              <span className="statbar-v" style={{ color: STATUS_HEX[s] }}>{fmtTokens(r.byStatus[s])}</span>
-            </div>
+            <Tip key={s} content={<TipChip title={s} rows={[
+              { sw: STATUS_HEX[s], k: "tokens", v: fmtInt(r.byStatus[s]) },
+              { k: "of reclaimable", v: r.reclaimableTokens ? fmtPct(r.byStatus[s] / r.reclaimableTokens) : "0%" },
+            ]} />}>
+              <div className="statbar">
+                <span className="statbar-k" style={{ color: STATUS_HEX[s] }}>
+                  <span className="d" style={{ background: STATUS_HEX[s] }} />{s}
+                </span>
+                <span className="statbar-track">
+                  <span className="statbar-fill" style={{ width: `${(r.byStatus[s] / maxStatus) * 100}%`, background: STATUS_HEX[s] }} />
+                </span>
+                <span className="statbar-v" style={{ color: STATUS_HEX[s] }}>{fmtTokens(r.byStatus[s])}</span>
+              </div>
+            </Tip>
           ))}
         </div>
       </div>
@@ -199,6 +243,9 @@ function ReclaimablePanel({ r }: { r: SessionDetail["reclaimable"] }) {
 }
 
 function CleanerPanel({ clean }: { clean?: SessionDetail["clean"] }) {
+  const empty = !clean || (clean.actions.length === 0 && !clean.compact);
+  const stopN = clean ? clean.actions.filter((a) => a.type === "stop_referencing").length : 0;
+  const rereadN = clean ? clean.actions.filter((a) => a.type === "re_read").length : 0;
   return (
     <>
       <div className="pnl-h">
@@ -210,52 +257,80 @@ function CleanerPanel({ clean }: { clean?: SessionDetail["clean"] }) {
         </span>
       </div>
       <div className="pnl-body">
-        {!clean || (clean.actions.length === 0 && !clean.compact) ? (
+        {empty ? (
           <div className="clean-empty">
             ✓ NOTHING TO CLEAN — no deleted or drifted files, and the window isn’t garbage-heavy enough to compact.
           </div>
         ) : (
-          <div className="clean-stack">
-            {clean.compact && (
-              <div className="compact-strip">
-                <div className="compact-strip-head">
-                  <div className="clean-sec-h">Compact <span className="c">— reset the window</span></div>
-                  <CopyButton label="COPY /compact" text={clean.compact.command} />
-                </div>
-                <div className="compact-strip-body">
-                  <div className="compact-stats">
-                    <div className="compact-stat"><span className="k">spent</span><span className="v">{fmtTokens(clean.compact.spentTokens)}</span></div>
-                    <div className="compact-stat"><span className="k">duplicate</span><span className="v">{fmtTokens(clean.compact.duplicateTokens)}</span></div>
-                    {clean.compact.estimatedUsdSaved != null && (
-                      <div className="compact-stat"><span className="k">saves</span><span className="v pos">~{fmtUsd(clean.compact.estimatedUsdSaved)}/t</span></div>
-                    )}
-                  </div>
-                  <div className="compact-cmd">{clean.compact.command}</div>
-                  <div className="compact-note">Run inside your live Claude Code session — Glassbox can’t compact for you.</div>
-                </div>
-              </div>
-            )}
+          <div className="cln">
+            {/* summary strip */}
+            <div className="cln-kpis">
+              <div className="cln-kpi"><span className="k">stop</span><span className="v" style={{ color: "#ff5765" }}>{stopN}</span></div>
+              <div className="cln-kpi"><span className="k">re-read</span><span className="v" style={{ color: "#ff9f43" }}>{rereadN}</span></div>
+              <div className="cln-kpi"><span className="k">reclaimable</span><span className="v">{fmtTokens(clean!.summary.reclaimableTokens)}</span></div>
+              {clean!.summary.estimatedUsdSaved != null && (
+                <div className="cln-kpi"><span className="k">saves/turn</span><span className="v" style={{ color: "#25d07d" }}>~{fmtUsd(clean!.summary.estimatedUsdSaved)}</span></div>
+              )}
+            </div>
 
-            <div>
-              <div className="clean-sec-h">CLAUDE.md fixes <span className="c">— stop trusting these files</span></div>
-              {clean.actions.length === 0 ? (
-                <div className="compact-note">No deleted or drifted files in the window.</div>
-              ) : (
-                <>
-                  <div className="act-table">
-                    {clean.actions.map((a, i) => (
-                      <div className="act-row" key={i}>
-                        <span className={`act-verb ${a.type}`}>{a.type === "stop_referencing" ? "STOP" : "RE-READ"}</span>
-                        <span className="act-path" title={a.path}>{a.path}</span>
-                        <span className="act-tok">{fmtTokens(a.reclaimableTokens)}</span>
-                      </div>
+            <div className="cln-cols">
+              {/* left — file fixes */}
+              <div className="cln-col">
+                <div className="cln-col-h">
+                  <span className="cln-col-t">CLAUDE.md fixes</span>
+                  {clean!.actions.length > 0 && (
+                    <CopyButton label="COPY BLOCK" text={buildClaudeMdBlock(clean!.actions)} />
+                  )}
+                </div>
+                {clean!.actions.length === 0 ? (
+                  <div className="cln-none">No deleted or drifted files in the window.</div>
+                ) : (
+                  <div className="cln-fixes">
+                    {clean!.actions.map((a, i) => (
+                      <Tip key={i} content={<TipChip
+                        title={a.type === "stop_referencing" ? "STOP REFERENCING" : "RE-READ"}
+                        rows={[
+                          { k: a.path, v: fmtTokens(a.reclaimableTokens) },
+                          { k: a.reason },
+                        ]}
+                      />}>
+                        <div className="cln-fix">
+                          <span className={`act-verb ${a.type}`}>{a.type === "stop_referencing" ? "STOP" : "RE-READ"}</span>
+                          <span className="act-path">{a.path}</span>
+                          <span className="act-tok">{fmtTokens(a.reclaimableTokens)}</span>
+                        </div>
+                      </Tip>
                     ))}
                   </div>
-                  <div style={{ marginTop: 8 }}>
-                    <CopyButton label="COPY CLAUDE.md BLOCK" text={buildClaudeMdBlock(clean.actions)} />
+                )}
+              </div>
+
+              {/* right — compact */}
+              <div className="cln-col">
+                <div className="cln-col-h">
+                  <span className="cln-col-t">Compact window</span>
+                  {clean!.compact && <CopyButton label="COPY CMD" text={clean!.compact.command} />}
+                </div>
+                {clean!.compact ? (
+                  <div className="cln-compact">
+                    <div className="cln-cmp-top">
+                      <span className="cln-cmp-pct">{fmtPct(clean!.compact.reclaimablePct)}</span>
+                      <span className="cln-cmp-pctlbl">of window<br />reclaimable</span>
+                      <div className="cln-cmp-chips">
+                        <span className="chip"><i style={{ background: "#b18cf2" }} />spent {fmtTokens(clean!.compact.spentTokens)}</span>
+                        <span className="chip"><i style={{ background: "#5b8af5" }} />dup {fmtTokens(clean!.compact.duplicateTokens)}</span>
+                        {clean!.compact.estimatedUsdSaved != null && (
+                          <span className="chip pos">saves ~{fmtUsd(clean!.compact.estimatedUsdSaved)}/t</span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="cln-cmd">{clean!.compact.command}</div>
+                    <div className="cln-cmp-note">Run inside your live Claude Code session — Glassbox can’t compact for you.</div>
                   </div>
-                </>
-              )}
+                ) : (
+                  <div className="cln-none">Below the compact threshold — not worth a reset yet.</div>
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -277,16 +352,21 @@ function TapePanel({ items }: { items: SessionDetail["reclaimable"]["items"] }) 
         ) : (
           <div className="tape">
             {items.map((it, i) => (
-              <div className="tape-row" key={i}>
-                <span className="tape-badge" style={{ color: statusColor(it.status) }}>
-                  {it.status}
-                </span>
-                <div style={{ minWidth: 0 }}>
-                  <div className="tape-label">{it.label}</div>
-                  <div className="tape-reason">{it.reason}</div>
+              <Tip key={i} content={<TipChip title={it.status.toUpperCase()} rows={[
+                { sw: STATUS_HEX[it.status], k: it.label, v: `${fmtInt(it.tokens)} tok` },
+                { k: it.reason },
+              ]} />}>
+                <div className="tape-row">
+                  <span className="tape-badge" style={{ color: statusColor(it.status) }}>
+                    {it.status}
+                  </span>
+                  <div style={{ minWidth: 0 }}>
+                    <div className="tape-label">{it.label}</div>
+                    <div className="tape-reason">{it.reason}</div>
+                  </div>
+                  <span className="tape-tok" style={{ color: statusColor(it.status) }}>{fmtTokens(it.tokens)}</span>
                 </div>
-                <span className="tape-tok" style={{ color: statusColor(it.status) }}>{fmtTokens(it.tokens)}</span>
-              </div>
+              </Tip>
             ))}
           </div>
         )}
