@@ -1,4 +1,12 @@
-# Glassbox
+<p align="center">
+  <h1>Glassbox</h1>
+  <p>
+    <span style="background: #007AFF; color: white; padding: 6px 12px; border-radius: 16px; margin: 4px; display: inline-block; font-size: 13px; font-weight: 600;">Local-first</span>
+    <span style="background: #312ECB; color: white; padding: 6px 12px; border-radius: 16px; margin: 4px; display: inline-block; font-size: 13px; font-weight: 600;">Read-only</span>
+    <span style="background: #34C759; color: white; padding: 6px 12px; border-radius: 16px; margin: 4px; display: inline-block; font-size: 13px; font-weight: 600;">Lossless Fork</span>
+    <span style="background: #FF9500; color: white; padding: 6px 12px; border-radius: 16px; margin: 4px; display: inline-block; font-size: 13px; font-weight: 600;">Web Inspector</span>
+  </p>
+</p>
 
 Glassbox is a local-first, read-only inspector for AI-agent context. It reads what
 a coding agent actually carries in its context window, shows how much of it is
