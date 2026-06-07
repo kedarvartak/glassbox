@@ -54,7 +54,18 @@ export function App() {
       ) : loadingDetail || !detail ? (
         <div className="screen-center"><div><div className="spin" />ANALYZING SESSION…</div></div>
       ) : (
-        <SessionView d={detail} locator={selected} />
+        <SessionView
+          d={detail}
+          locator={selected}
+          onForked={(loc) => {
+            // Refresh the list (the cleaned session is freshly indexed) and
+            // switch to it so the dashboard shows the cleaned stats.
+            api.sessions().then((list) => {
+              setSessions(list);
+              setSelected(loc);
+            });
+          }}
+        />
       )}
     </div>
   );

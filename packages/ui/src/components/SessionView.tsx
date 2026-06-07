@@ -22,13 +22,17 @@ const COST_PARTS = [
   { key: "cache write", color: "#b18cf2", pick: (b: SessionDetail["cost"]["breakdown"]) => b.cacheWriteUsd },
 ] as const;
 
-export function SessionView({ d, locator }: { d: SessionDetail; locator: string | null }) {
+export function SessionView({ d, locator, onForked }: {
+  d: SessionDetail;
+  locator: string | null;
+  onForked?: (locator: string) => void;
+}) {
   return (
     <div className="grid">
       <div className="pnl area-comp"><CompositionPanel xray={d.xray} /></div>
       <div className="pnl area-cost"><CostPanel cost={d.cost} /></div>
       <div className="pnl area-recl"><ReclaimablePanel r={d.reclaimable} /></div>
-      <div className="pnl area-clean"><CleanerPanel clean={d.clean} locator={locator} /></div>
+      <div className="pnl area-clean"><CleanerPanel clean={d.clean} locator={locator} onForked={onForked} /></div>
       <div className="pnl area-tape"><TapePanel items={d.reclaimable.items} /></div>
     </div>
   );
@@ -254,7 +258,11 @@ const EVICT_HEX: Record<string, string> = {
   GONE: "#ff5765", DRIFT: "#ff9f43", OLD: "#b18cf2", DUP: "#5b8af5", SPENT: "#8a93a6",
 };
 
-function CleanerPanel({ clean, locator }: { clean?: SessionDetail["clean"]; locator: string | null }) {
+function CleanerPanel({ clean, locator, onForked }: {
+  clean?: SessionDetail["clean"];
+  locator: string | null;
+  onForked?: (locator: string) => void;
+}) {
   const empty = !clean || clean.actions.length === 0;
   const [forking, setForking] = useState(false);
   const [result, setResult] = useState<ForkResult | null>(null);
@@ -264,7 +272,12 @@ function CleanerPanel({ clean, locator }: { clean?: SessionDetail["clean"]; loca
     setForking(true);
     setResult(null);
     api.fork(locator)
-      .then(setResult)
+      .then((res) => {
+        setResult(res);
+        // On success the cleaned session is indexed; switch the dashboard to it
+        // so its (clean) stats are what the user sees — proof it worked.
+        if (res.ok && res.outPath) onForked?.(res.outPath);
+      })
       .catch((e: unknown) => setResult({ ok: false, error: String(e) }))
       .finally(() => setForking(false));
   };
