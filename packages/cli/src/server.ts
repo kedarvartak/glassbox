@@ -110,7 +110,7 @@ async function handle(
       sendJson(res, 404, { error: "session not indexed" });
       return;
     }
-    const result = await runFork(locator, indexed.session, opts.tokens, repo);
+    const result = await runFork(locator, indexed.session, opts.tokens, repo, opts.index);
     sendJson(res, result.ok ? 200 : 422, result);
     return;
   }
@@ -129,6 +129,7 @@ async function runFork(
   session: Session,
   tokens: TokenCounter,
   repo: FsRepoState,
+  index: SessionIndex,
 ): Promise<
   | { ok: true; newSessionId: string; outPath: string; copies: number; netReclaimedTokens: number; beforeTokens: number; afterTokens: number }
   | { ok: false; error: string }
@@ -168,11 +169,21 @@ async function runFork(
   await writeFile(outPath, text, "utf8");
 
   // Integrity proof: re-parse the fork. If it throws, the rewrite is unsafe.
+  // On success, index the new session so the dashboard can show its (clean) stats.
   let afterTokens = snapshot.totalTokens - eviction.netReclaimedTokens;
   try {
     const cleaned = parseClaudeSession(text, { tool: "claude-code", locator: outPath }, tokens);
     const after = await analyzeSessionReclaimable(cleaned, { repo, tokens, ...(pricing ? { pricing } : {}) });
     afterTokens = after.snapshot.totalTokens;
+    const st = await stat(outPath).catch(() => null);
+    index.upsert({
+      locator: outPath,
+      session: cleaned,
+      source: {
+        modifiedAt: st ? new Date(st.mtimeMs).toISOString() : null,
+        sizeBytes: st ? st.size : null,
+      },
+    });
   } catch (e) {
     return { ok: false, error: `fork failed to re-parse: ${e instanceof Error ? e.message : String(e)}` };
   }
