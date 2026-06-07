@@ -54,7 +54,7 @@ export function App() {
       ) : loadingDetail || !detail ? (
         <div className="screen-center"><div><div className="spin" />ANALYZING SESSION…</div></div>
       ) : (
-        <SessionView d={detail} />
+        <SessionView d={detail} locator={selected} />
       )}
     </div>
   );

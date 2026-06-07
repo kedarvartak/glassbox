@@ -1,17 +1,24 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { readFile, stat } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { readFile, stat, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, extname, join, normalize } from "node:path";
 import type { Session, TokenCounter } from "@glassbox/core";
 import {
-  analyzeSessionCost,
   analyzeSessionReclaimable,
+  analyzeSessionCost,
   checkTokenAccuracy,
   composition,
   FsRepoState,
   planEviction,
   pricingFor,
 } from "@glassbox/analysis";
+import {
+  forkTranscript,
+  newProblems,
+  parseClaudeSession,
+  validateTranscript,
+} from "@glassbox/adapter-claude-code";
 import type { SessionIndex } from "@glassbox/store";
 
 /**
@@ -93,7 +100,92 @@ async function handle(
     return;
   }
 
+  // The one *write* endpoint: produce a cleaned sibling session (provable
+  // eviction). It only ever writes a NEW file — the original is never touched —
+  // and refuses to write if the fork introduces any structural problem.
+  if (url.pathname === "/api/fork" && req.method === "POST") {
+    const locator = url.searchParams.get("locator");
+    const indexed = locator ? opts.index.get(locator) : null;
+    if (!locator || !indexed) {
+      sendJson(res, 404, { error: "session not indexed" });
+      return;
+    }
+    const result = await runFork(locator, indexed.session, opts.tokens, repo);
+    sendJson(res, result.ok ? 200 : 422, result);
+    return;
+  }
+
   await serveStatic(res, uiDist, url.pathname);
+}
+
+/**
+ * Write a cleaned fork of `locator` to a fresh sibling session. Mirrors the CLI
+ * `clean --fork` path: plan provable eviction → tombstone in a derived copy →
+ * validate it introduces no new structural problems → write a new `<id>.jsonl`
+ * → re-parse as an integrity proof. The original is never modified.
+ */
+async function runFork(
+  locator: string,
+  session: Session,
+  tokens: TokenCounter,
+  repo: FsRepoState,
+): Promise<
+  | { ok: true; newSessionId: string; outPath: string; copies: number; netReclaimedTokens: number; beforeTokens: number; afterTokens: number }
+  | { ok: false; error: string }
+> {
+  const pricing = pricingFor(session.messages.find((m) => m.model)?.model);
+  const { snapshot, report } = await analyzeSessionReclaimable(session, {
+    repo,
+    tokens,
+    ...(pricing ? { pricing } : {}),
+  });
+  const eviction = planEviction(report, snapshot);
+  const evictions = new Map<string, string>();
+  for (const a of eviction.actions) {
+    if (a.originToolCallId) evictions.set(a.originToolCallId, a.tombstone);
+  }
+  if (evictions.size === 0) return { ok: false, error: "nothing to evict — no provable garbage in this session" };
+
+  let raw: string;
+  try {
+    raw = await readFile(locator, "utf8");
+  } catch {
+    return { ok: false, error: `cannot read transcript at ${locator}` };
+  }
+
+  const newSessionId = randomUUID();
+  const { text } = forkTranscript(raw, evictions, { newSessionId });
+
+  // Safety gate: refuse if the fork introduces a new structural problem.
+  const introduced = newProblems(validateTranscript(raw), validateTranscript(text));
+  if (introduced.length > 0) {
+    return { ok: false, error: `fork would introduce ${introduced.length} structural problem(s) — refusing to write` };
+  }
+
+  const outPath = locator.endsWith(".jsonl")
+    ? join(dirname(locator), `${newSessionId}.jsonl`)
+    : `${locator}.${newSessionId}.jsonl`;
+  await writeFile(outPath, text, "utf8");
+
+  // Integrity proof: re-parse the fork. If it throws, the rewrite is unsafe.
+  let afterTokens = snapshot.totalTokens - eviction.netReclaimedTokens;
+  try {
+    const cleaned = parseClaudeSession(text, { tool: "claude-code", locator: outPath }, tokens);
+    const after = await analyzeSessionReclaimable(cleaned, { repo, tokens, ...(pricing ? { pricing } : {}) });
+    afterTokens = after.snapshot.totalTokens;
+  } catch (e) {
+    return { ok: false, error: `fork failed to re-parse: ${e instanceof Error ? e.message : String(e)}` };
+  }
+
+  return {
+    ok: true,
+    newSessionId,
+    outPath,
+    copies: eviction.actions.length,
+    netReclaimedTokens: eviction.netReclaimedTokens,
+    beforeTokens: snapshot.totalTokens,
+    afterTokens,
+  };
 }
 
 async function buildDetail(session: Session, tokens: TokenCounter, repo: FsRepoState) {

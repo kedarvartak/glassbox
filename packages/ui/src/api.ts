@@ -104,8 +104,26 @@ async function getJSON<T>(url: string): Promise<T> {
   return (await res.json()) as T;
 }
 
+export interface ForkResult {
+  readonly ok: boolean;
+  readonly newSessionId?: string;
+  readonly outPath?: string;
+  readonly copies?: number;
+  readonly netReclaimedTokens?: number;
+  readonly beforeTokens?: number;
+  readonly afterTokens?: number;
+  readonly error?: string;
+}
+
+async function postJSON<T>(url: string): Promise<T> {
+  const res = await fetch(url, { method: "POST" });
+  return (await res.json()) as T; // 200 and 422 both carry a JSON body
+}
+
 export const api = {
   sessions: () => getJSON<SessionListItem[]>("/api/sessions"),
   session: (locator: string) =>
     getJSON<SessionDetail>(`/api/session?locator=${encodeURIComponent(locator)}`),
+  fork: (locator: string) =>
+    postJSON<ForkResult>(`/api/fork?locator=${encodeURIComponent(locator)}`),
 };

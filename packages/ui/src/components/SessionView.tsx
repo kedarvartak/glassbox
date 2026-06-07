@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { SessionDetail, SegmentStatus } from "../api.js";
+import { api, type ForkResult, type SessionDetail, type SegmentStatus } from "../api.js";
 import { fmtInt, fmtPct, fmtTokens, fmtUsd, statusColor } from "../format.js";
 import { Tip, TipChip } from "./Tooltip.js";
 
@@ -22,13 +22,13 @@ const COST_PARTS = [
   { key: "cache write", color: "#b18cf2", pick: (b: SessionDetail["cost"]["breakdown"]) => b.cacheWriteUsd },
 ] as const;
 
-export function SessionView({ d }: { d: SessionDetail }) {
+export function SessionView({ d, locator }: { d: SessionDetail; locator: string | null }) {
   return (
     <div className="grid">
       <div className="pnl area-comp"><CompositionPanel xray={d.xray} /></div>
       <div className="pnl area-cost"><CostPanel cost={d.cost} /></div>
       <div className="pnl area-recl"><ReclaimablePanel r={d.reclaimable} /></div>
-      <div className="pnl area-clean"><CleanerPanel clean={d.clean} /></div>
+      <div className="pnl area-clean"><CleanerPanel clean={d.clean} locator={locator} /></div>
       <div className="pnl area-tape"><TapePanel items={d.reclaimable.items} /></div>
     </div>
   );
@@ -254,8 +254,21 @@ const EVICT_HEX: Record<string, string> = {
   GONE: "#ff5765", DRIFT: "#ff9f43", OLD: "#b18cf2", DUP: "#5b8af5", SPENT: "#8a93a6",
 };
 
-function CleanerPanel({ clean }: { clean?: SessionDetail["clean"] }) {
+function CleanerPanel({ clean, locator }: { clean?: SessionDetail["clean"]; locator: string | null }) {
   const empty = !clean || clean.actions.length === 0;
+  const [forking, setForking] = useState(false);
+  const [result, setResult] = useState<ForkResult | null>(null);
+
+  const runFork = () => {
+    if (!locator || forking) return;
+    setForking(true);
+    setResult(null);
+    api.fork(locator)
+      .then(setResult)
+      .catch((e: unknown) => setResult({ ok: false, error: String(e) }))
+      .finally(() => setForking(false));
+  };
+
   // roll up provable garbage by class for the KPI strip.
   const byClass = new Map<string, { count: number; tokens: number }>();
   for (const a of clean?.actions ?? []) {
@@ -267,11 +280,29 @@ function CleanerPanel({ clean }: { clean?: SessionDetail["clean"] }) {
     <>
       <div className="pnl-h">
         <span className="bar" /><span className="t">Context Cleaner</span>
+        {!empty && (
+          <button className={`fork-btn${forking ? " busy" : ""}`} type="button" onClick={runFork} disabled={forking || !locator}>
+            {forking ? "CLEANING…" : "RUN FORK ▸"}
+          </button>
+        )}
         <span className="hint">
           {clean ? `${clean.summary.copies} COP${clean.summary.copies !== 1 ? "IES" : "Y"} · LOSSLESS` : "—"}
         </span>
       </div>
       <div className="pnl-body">
+        {result && (
+          <div className={`fork-result${result.ok ? " ok" : " err"}`}>
+            {result.ok ? (
+              <>
+                ✓ WROTE CLEANED SESSION <b>{result.newSessionId?.slice(0, 8)}…</b> ·{" "}
+                {fmtTokens(result.beforeTokens ?? 0)} → {fmtTokens(result.afterTokens ?? 0)} tokens ·{" "}
+                resume it with <span className="amber">claude --resume</span>. Original untouched.
+              </>
+            ) : (
+              <>✗ {result.error}</>
+            )}
+          </div>
+        )}
         {empty ? (
           <div className="clean-empty">✓ NOTHING TO CLEAN — no provable garbage in this session.</div>
         ) : (

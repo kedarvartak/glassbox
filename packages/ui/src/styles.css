@@ -351,6 +351,34 @@ button { cursor: pointer; font: inherit; color: inherit; }
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.pnl-h .fork-btn {
+  margin-left: auto;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: #06070a;
+  background: var(--amber);
+  border: none;
+  padding: 2px 8px;
+  cursor: pointer;
+  text-transform: uppercase;
+}
+.pnl-h .fork-btn:hover { filter: brightness(1.12); }
+.pnl-h .fork-btn:disabled { opacity: 0.6; cursor: default; }
+.pnl-h .fork-btn.busy { background: var(--dim); color: #fff; }
+.pnl-h .fork-btn + .hint { margin-left: 8px; }
+.fork-result {
+  flex-shrink: 0;
+  margin: 8px 8px 0;
+  padding: 6px 9px;
+  font-size: 11px;
+  line-height: 1.5;
+  border: 1px solid;
+}
+.fork-result.ok { color: #25d07d; border-color: #1c5e3c; background: rgba(37, 208, 125, 0.06); }
+.fork-result.err { color: #ff5765; border-color: #6e2730; background: rgba(255, 87, 101, 0.06); }
+.fork-result b { color: var(--amber); }
 .pnl-body {
   flex: 1;
   min-height: 0;
