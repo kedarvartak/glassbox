@@ -1,6 +1,6 @@
-# glassbox clean — the cleaner: dry-run plan, the confirmation gate, staged /compact.
-# Non-destructive: the --apply step answers "n" so the repo's CLAUDE.md is untouched.
-# Record: vhs assets/demos/clean.tape
+# glassbox clean — the cleaner: dry-run eviction plan, then the lossless fork.
+# The fork writes a NEW sibling session; the original is never touched.
+# Record: GLASSBOX_DEMO_SESSION=<session.jsonl> vhs assets/demos/clean.tape
 Output assets/demos/clean.gif
 
 Set Shell bash
@@ -18,25 +18,15 @@ Type "clear"
 Enter
 Show
 
-# 1. dry run — see the plan, nothing is written
+# 1. dry run — see exactly what provable garbage would be removed, nothing written
 Sleep 700ms
 Type "glassbox clean $S"
 Sleep 500ms
 Enter
 Sleep 4s
 
-# 2. apply — shows the confirmation gate; we answer "n" (read-only demo)
-Type "glassbox clean $S --apply"
+# 2. fork — write a cleaned, lossless sibling session (original untouched)
+Type "glassbox clean $S --fork --yes"
 Sleep 500ms
 Enter
-Sleep 2500ms
-Type "n"
-Sleep 400ms
-Enter
-Sleep 2s
-
-# 3. compact — stage the /compact command for the live session
-Type "glassbox clean $S --compact --yes"
-Sleep 500ms
-Enter
-Sleep 4s
+Sleep 5s
