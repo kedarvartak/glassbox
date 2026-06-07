@@ -97,7 +97,19 @@ glassbox serve     # local dashboard at 127.0.0.1:4317
 ```
 
 Open a session to read its x-ray and cost, and click RUN FORK in the Context
-Cleaner panel to write a cleaned session from the browser.
+Cleaner panel to write a cleaned session from the browser. The dashboard then
+switches to the cleaned session so you can see the result.
+
+The example below is one real session before and after a fork. The window drops
+from 146.5k to 79.7k tokens (46% lighter) and reclaimable falls from 65% to 35%,
+while cost and history stay exactly the same — nothing was summarized.
+
+<p align="center">
+  <img src="assets/screenshots/dashboard-before.png" alt="dashboard before the fork — 65% reclaimable, 146.5k tokens" width="900">
+</p>
+<p align="center">
+  <img src="assets/screenshots/dashboard-after.png" alt="dashboard after the fork — 35% reclaimable, 79.7k tokens" width="900">
+</p>
 
 ## Commands
 
