@@ -67,6 +67,20 @@ describe("forkTranscript (Layer 2 rewriter)", () => {
     expect(summary.notFound).toEqual(["ghost"]);
   });
 
+  it("also stubs the toolUseResult mirror so a resume can't re-inflate", () => {
+    const raw = JSON.stringify({
+      type: "user",
+      uuid: "r1",
+      message: { role: "user", content: [{ type: "tool_result", tool_use_id: "t1", content: "OLD FILE BYTES" }] },
+      toolUseResult: { type: "text", file: { filePath: "/a.ts", content: "OLD FILE BYTES", numLines: 1 } },
+    });
+    const { text } = forkTranscript(raw, new Map([["t1", TOMB]]));
+    const ev = JSON.parse(text);
+    expect(ev.message.content[0].content).toBe(TOMB);
+    expect(ev.toolUseResult.file.content).not.toContain("OLD FILE BYTES");
+    expect(ev.toolUseResult.file.filePath).toBe("/a.ts"); // shape preserved
+  });
+
   it("passes malformed and blank lines through untouched", () => {
     const raw = ["not json", "", toolResult("t1", "OLD")].join("\n");
     const { text } = forkTranscript(raw, new Map([["t1", TOMB]]));

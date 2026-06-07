@@ -1,10 +1,10 @@
 #!/usr/bin/env node
-import { spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createInterface } from "node:readline/promises";
-import { homedir, platform } from "node:os";
+import { homedir } from "node:os";
 import { dirname, join } from "node:path";
-import { ClaudeCodeAdapter, claudeProjectsRoot, forkTranscript } from "@glassbox/adapter-claude-code";
+import { ClaudeCodeAdapter, claudeProjectsRoot, forkTranscript, validateTranscript, newProblems } from "@glassbox/adapter-claude-code";
 import {
   analyzeSessionCost,
   analyzeSessionReclaimable,
@@ -12,12 +12,8 @@ import {
   composition,
   FsRepoState,
   PRICING_AS_OF,
-  compactCommand,
-  plan,
   planEviction,
   pricingFor,
-  suggestedCompactFocus,
-  upsertHygieneBlock,
 } from "@glassbox/analysis";
 import { SessionIndex, SessionIndexer } from "@glassbox/store";
 import { startServer, uiIsBuilt } from "./server.js";
@@ -26,7 +22,7 @@ import {
   bold, dim, gray, green, yellow, red, nl, hr,
   fmtUsd, fmtTok, fmtPct, fmtInt,
   renderHeader, renderStats, renderXray, renderCost, renderReclaimable, renderSessions,
-  renderCleanPlan, renderCompactCommand,
+  renderEvictionPlan,
 } from "./render.js";
 
 /**
@@ -205,7 +201,7 @@ async function main(argv: string[]): Promise<number> {
     case "clean": {
       const locator = rest[0];
       if (!locator) {
-        console.error("usage: glassbox clean <session.jsonl> [--apply] [--compact] [--fork] [--yes] [--json]");
+        console.error("usage: glassbox clean <session.jsonl> [--fork] [--yes] [--json]");
         return 2;
       }
       const session = await adapter.parse({ tool: "claude-code", locator });
@@ -216,15 +212,13 @@ async function main(argv: string[]): Promise<number> {
         tokens,
         ...(pricing ? { pricing } : {}),
       });
-      const cleanPlan = plan(report, session);
+      const eviction = planEviction(report, snapshot);
 
       if (rest.includes("--json")) {
-        console.log(JSON.stringify(cleanPlan, null, 2));
+        console.log(JSON.stringify(eviction, null, 2));
         return 0;
       }
 
-      const apply = rest.includes("--apply");
-      const doCompact = rest.includes("--compact");
       const doFork = rest.includes("--fork");
       const assumeYes = rest.includes("--yes") || rest.includes("-y");
 
@@ -242,62 +236,21 @@ async function main(argv: string[]): Promise<number> {
         memoryOpCount: session.memoryOps.length,
       }, model);
 
-      renderCleanPlan(cleanPlan, !apply && !doCompact && !doFork);
+      renderEvictionPlan(eviction, { dryRun: !doFork });
 
-      // ── Phase C: write the CLAUDE.md hygiene block (user-confirmed) ──
-      if (apply) {
-        if (cleanPlan.claudeMdBlocks.length === 0) {
-          console.log(gray("  nothing to write — no file-level fixes in this plan."));
-        } else {
-          const claudeMdPath = join(session.projectPath, "CLAUDE.md");
-          const existing = safeRead(claudeMdPath);
-          const next = upsertHygieneBlock(existing, cleanPlan, new Date());
-          if (next === existing) {
-            console.log(green("  ✓ CLAUDE.md already up to date — nothing to write."));
-          } else {
-            console.log(`  ${bold("Target:")} ${claudeMdPath}`);
-            console.log(`  ${dim(existing.trim() === "" ? "(new file)" : "appends/updates a managed Glassbox block; your content is untouched")}`);
-            nl();
-            const ok = assumeYes || await confirm(`  Write ${cleanPlan.claudeMdBlocks.length} hygiene line(s) to CLAUDE.md?`);
-            if (ok) {
-              writeFileSync(claudeMdPath, next, "utf8");
-              console.log(green(`  ✓ wrote hygiene block to ${claudeMdPath}`));
-            } else {
-              console.log(gray("  aborted — no changes written."));
-            }
-          }
-          nl();
-        }
-      }
-
-      // ── Phase D: stage the /compact command (read-only — never auto-run) ──
-      if (doCompact) {
-        const focus = cleanPlan.compactRecommendation?.suggestedSummaryFocus
-          ?? suggestedCompactFocus(session);
-        const command = compactCommand(focus);
-        const copied = assumeYes || await confirm("  Copy the /compact command to your clipboard?")
-          ? await copyToClipboard(command)
-          : false;
-        renderCompactCommand(command, {
-          copied,
-          belowThreshold: cleanPlan.compactRecommendation === undefined,
-        });
-      }
-
-      // ── Layer 2: write a cleaned fork with superseded copies tombstoned ──
-      // Never mutates the original; produces a *new* <name>.cleaned.jsonl the
-      // user can `claude --resume` from with a lighter window.
+      // ── Write a cleaned fork: provable garbage tombstoned into a new session ──
+      // Never mutates the original; produces a *new* <newId>.jsonl the user can
+      // `claude --resume` from with a lighter, lossless window.
       if (doFork) {
-        const eviction = planEviction(report, snapshot);
         const evictions = new Map<string, string>();
         for (const a of eviction.actions) {
           if (a.originToolCallId) evictions.set(a.originToolCallId, a.tombstone);
         }
         nl();
-        hr("CLEANED FORK (Layer 2)");
+        hr("CLEANED FORK");
         nl();
         if (evictions.size === 0) {
-          console.log(gray("  nothing to evict — no superseded copies in this session."));
+          console.log(gray("  nothing to evict — no provable garbage in this session."));
           nl();
           return 0;
         }
@@ -307,18 +260,39 @@ async function main(argv: string[]): Promise<number> {
           console.log(red(`  cannot read transcript at ${locator}`));
           return 1;
         }
-        const { text, summary } = forkTranscript(raw, evictions);
-        const outPath = locator.endsWith(".jsonl")
-          ? locator.replace(/\.jsonl$/, ".cleaned.jsonl")
-          : `${locator}.cleaned.jsonl`;
+        // Mint a fresh session id so Claude Code lists the fork as its own
+        // resumable session; the filename must equal that id (doc: filename ==
+        // internal sessionId). The original session is left fully intact.
+        const newSessionId = randomUUID();
+        const { text, summary } = forkTranscript(raw, evictions, { newSessionId });
+        const outPath = join(dirname(locator), `${newSessionId}.jsonl`);
 
         console.log(`  ${bold("Source:")} ${dim(locator)}  ${dim("(untouched)")}`);
+        console.log(`  ${bold("New session:")} ${green(newSessionId)}`);
         console.log(`  ${bold("Output:")} ${outPath}`);
         console.log(`  tombstoned ${green(String(summary.evicted))} superseded ` +
           `cop${summary.evicted === 1 ? "y" : "ies"}; ` +
           `${fmtInt(eviction.netReclaimedTokens)} tokens net reclaimed`);
         if (summary.notFound.length > 0) {
           console.log(gray(`  (${summary.notFound.length} planned eviction(s) had no locatable bytes — skipped)`));
+        }
+        nl();
+
+        // ── Safety gate: the fork must introduce no new structural problems ──
+        // (orphaned tool pairs, dangling parentUuid, empty content, bad JSON).
+        const before = validateTranscript(raw);
+        const after = validateTranscript(text);
+        const introduced = newProblems(before, after);
+        console.log(`  ${bold("Integrity:")} ${after.toolUses} tool_use / ${after.toolResults} tool_result · ${after.messages} messages`);
+        if (introduced.length > 0) {
+          console.log(red(`  ✗ fork would introduce ${introduced.length} structural problem(s) — refusing to write:`));
+          for (const p of introduced.slice(0, 8)) console.log(red(`      ${p.code}  ${p.detail}`));
+          console.log(gray(`  your original is untouched. This is a bug in the fork-writer; please report it.`));
+          return 1;
+        }
+        console.log(green(`  ✓ no new structural problems vs the original (pairing, threading, content all intact)`));
+        if (before.problems.length > 0) {
+          console.log(gray(`  (the original already has ${before.problems.length} pre-existing oddit(ies); carried over unchanged)`));
         }
         nl();
 
@@ -334,21 +308,24 @@ async function main(argv: string[]): Promise<number> {
         // rewrite broke the transcript; if it loads, resume is safe.
         try {
           const cleaned = await adapter.parse({ tool: "claude-code", locator: outPath });
-          const after = await analyzeSessionReclaimable(cleaned, {
+          const reAnalyzed = await analyzeSessionReclaimable(cleaned, {
             repo: new FsRepoState(),
             tokens,
             ...(pricing ? { pricing } : {}),
           });
-          const before = snapshot.totalTokens;
-          const now = after.snapshot.totalTokens;
+          const beforeTok = snapshot.totalTokens;
+          const nowTok = reAnalyzed.snapshot.totalTokens;
           console.log(green(`  ✓ fork re-parses cleanly (${cleaned.messages.length} messages intact)`));
-          console.log(`  context tokens  ${fmtTok(before)} → ${fmtTok(now)}  ` +
-            `(${fmtPct((before - now) / (before || 1))} lighter)`);
+          console.log(`  context tokens  ${fmtTok(beforeTok)} → ${fmtTok(nowTok)}  ` +
+            `(${fmtPct((beforeTok - nowTok) / (beforeTok || 1))} lighter)`);
         } catch (e) {
           console.log(red(`  ! fork failed to re-parse: ${e instanceof Error ? e.message : String(e)}`));
           console.log(red(`    the original is untouched; do not resume from the fork.`));
           return 1;
         }
+        nl();
+        console.log(`  ${bold("To try it:")} from this project's directory, run ${green("claude --resume")}`);
+        console.log(`  and pick the newest session (${dim(newSessionId.slice(0, 8))}…). Your original is still there.`);
         nl();
       }
       return 0;
@@ -467,7 +444,7 @@ async function main(argv: string[]): Promise<number> {
         ["inspect <session.jsonl>",        "full dashboard: stats + x-ray + cost + reclaimable"],
         ["xray <session.jsonl>",           "context composition by source + reclaimable tokens"],
         ["cost <session.jsonl>",           "cost breakdown from provider actuals"],
-        ["clean <session.jsonl>",          "hygiene plan; --apply writes CLAUDE.md, --compact stages /compact, --fork writes a cleaned transcript"],
+        ["clean <session.jsonl>",          "eviction plan of provable garbage; --fork writes a cleaned, lossless session"],
         ["sessions [--project <p>]",       "list indexed sessions (fast, no re-parse)"],
         ["index [--project <p>]",          "parse + incrementally index sessions into SQLite"],
         ["watch [--project <p>]",          "index then keep it live on file changes"],
@@ -521,34 +498,6 @@ async function confirm(question: string): Promise<boolean> {
     rl.close();
   }
 }
-
-/**
- * Best-effort copy to the system clipboard. Tries the platform's native tool;
- * returns false if none is available (the caller then tells the user to copy
- * manually). Never throws.
- */
-function copyToClipboard(text: string): Promise<boolean> {
-  const candidates: [string, string[]][] =
-    platform() === "darwin"
-      ? [["pbcopy", []]]
-      : platform() === "win32"
-        ? [["clip", []]]
-        : [["wl-copy", []], ["xclip", ["-selection", "clipboard"]], ["xsel", ["--clipboard", "--input"]]];
-
-  return new Promise((resolve) => {
-    const tryNext = (i: number): void => {
-      const entry = candidates[i];
-      if (!entry) return resolve(false);
-      const [cmd, args] = entry;
-      const child = spawn(cmd, args, { stdio: ["pipe", "ignore", "ignore"] });
-      child.on("error", () => tryNext(i + 1));
-      child.on("close", (code) => (code === 0 ? resolve(true) : tryNext(i + 1)));
-      child.stdin.end(text);
-    };
-    tryNext(0);
-  });
-}
-
 
 /**
  * Resolve the index db path (default `~/.glassbox/index.db`) and ensure its

@@ -84,27 +84,16 @@ export interface SessionDetail {
   };
   readonly clean: {
     readonly actions: readonly {
-      readonly type: "stop_referencing" | "re_read";
-      readonly path: string;
-      readonly reason: string;
+      readonly detail: "gone" | "stale-drift" | "stale-superseded" | "duplicate" | "spent-tool" | "spent-mcp";
+      readonly path: string | null;
       readonly reclaimableTokens: number;
-      readonly confidence: "provable" | "heuristic";
-      readonly claudeMdSnippet: string;
+      readonly tombstoneTokens: number;
     }[];
-    readonly compact: {
-      readonly reclaimablePct: number;
-      readonly reclaimableTokens: number;
-      readonly spentTokens: number;
-      readonly duplicateTokens: number;
-      readonly suggestedSummaryFocus: string;
-      readonly estimatedUsdSaved: number | null;
-      readonly command: string;
-    } | null;
     readonly summary: {
-      readonly actionCount: number;
+      readonly copies: number;
       readonly reclaimableTokens: number;
-      readonly reclaimablePct: number;
-      readonly estimatedUsdSaved: number | null;
+      readonly tombstoneTokens: number;
+      readonly netReclaimedTokens: number;
     };
   };
 }

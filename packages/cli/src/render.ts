@@ -2,7 +2,7 @@
  * CLI renderer — all terminal output lives here.
  * Pure ANSI/Unicode, zero dependencies.
  */
-import type { CleanPlan } from "@glassbox/analysis";
+import type { EvictionPlan, ReclaimableDetail } from "@glassbox/analysis";
 
 // ─── ANSI ────────────────────────────────────────────────────────────────────
 
@@ -311,102 +311,65 @@ export function renderReclaimable(r: ReclaimableReport, totalTokens: number): vo
 
 // ─── clean plan ───────────────────────────────────────────────────────────────
 
-export function renderCleanPlan(plan: CleanPlan, dryRun: boolean): void {
-  hr("CLEAN PLAN");
-  nl();
-
-  if (dryRun) {
-    console.log(`  ${dim("dry run — nothing is written. add")} ${bold("--apply")} ${dim("to act.")}`);
-    nl();
-  }
-
-  // CLAUDE.md actions
-  if (plan.claudeMdBlocks.length === 0) {
-    console.log(`  ${green("✓")}  ${gray("no file-level fixes — no deleted or drifted files in the window.")}`);
-  } else {
-    console.log(`  ${bold("CLAUDE.md")} ${gray("— tell the agent which files to stop trusting:")}`);
-    nl();
-    const verb = (t: string) => (t === "stop_referencing" ? red("STOP") : yellow("RE-READ"));
-    for (const a of plan.claudeMdBlocks) {
-      const tag = rpad(verb(a.type), 7 + 9); // +9 ANSI
-      const tok = lpad(bold(fmtTok(a.reclaimableTokens)), 7);
-      console.log(`  ${tag}  ${tok}  ${bold(a.path)}  ${dim("(" + a.confidence + ")")}`);
-      console.log(`  ${" ".repeat(7)}  ${" ".repeat(7)}  ${gray(a.reason)}`);
-    }
-  }
-  nl();
-
-  // compact recommendation
-  const c = plan.compactRecommendation;
-  if (c) {
-    console.log(`  ${bold("COMPACT")} ${gray("— window is")} ${bold(red(fmtPct(c.reclaimablePct)))} ${gray("reclaimable; a compact would clear the bulk:")}`);
-    nl();
-    console.log(`    ${gray("spent tool/MCP output")}   ${bold(fmtTok(c.spentTokens))} tok`);
-    console.log(`    ${gray("duplicate copies")}        ${bold(fmtTok(c.duplicateTokens))} tok`);
-    if (c.estimatedUsdSaved !== null) {
-      console.log(`    ${gray("stops wasting")}           ${bold(green("~" + fmtUsd(c.estimatedUsdSaved) + "/turn"))}`);
-    }
-    nl();
-    console.log(`    ${dim("suggested /compact focus:")}`);
-    console.log(`    ${cyan(wrap(c.suggestedSummaryFocus, 4))}`);
-  } else {
-    console.log(`  ${gray("no compact recommended — reclaimable% is below the threshold.")}`);
-  }
-  nl();
-
-  // summary
-  const usd = plan.summary.estimatedUsdSaved;
-  console.log(
-    `  ${dim("plan:")} ${bold(String(plan.summary.actionCount))} file action(s)` +
-    (c ? ` ${dim("+ 1 compact")}` : "") +
-    `  ${dim("·")}  ${bold(fmtTok(plan.summary.reclaimableTokens))} tok reclaimable` +
-    (usd !== null ? `  ${dim("·")}  ${green("~" + fmtUsd(usd) + "/turn")}` : "")
-  );
-  nl();
-}
+/** Short, fixed-width tag for each provable garbage class. */
+const DETAIL_TAG: Record<ReclaimableDetail, string> = {
+  gone: "GONE",
+  "stale-drift": "DRIFT",
+  "stale-superseded": "OLD",
+  duplicate: "DUP",
+  "spent-tool": "SPENT",
+  "spent-mcp": "SPENT",
+};
 
 /**
- * Render the ready-to-run `/compact` command. Glassbox is read-only and cannot
- * compact a finished transcript — this is a command to paste into the *live*
- * session, optionally pre-copied to the clipboard.
+ * Render the eviction plan — the provable, lossless garbage Glassbox will remove
+ * into a cleaned copy of the transcript. Dry-run by default; `--fork` writes it.
  */
-export function renderCompactCommand(command: string, opts: { copied: boolean; belowThreshold: boolean }): void {
-  hr("COMPACT COMMAND");
+export function renderEvictionPlan(plan: EvictionPlan, opts: { dryRun: boolean }): void {
+  hr("EVICTION PLAN");
   nl();
-  if (opts.belowThreshold) {
-    console.log(`  ${dim("note: this window is below the compact threshold — a compact may be premature.")}`);
+
+  if (plan.actions.length === 0) {
+    console.log(`  ${green("✓")}  ${gray("nothing to evict — no provable garbage in this session.")}`);
+    nl();
+    return;
+  }
+
+  if (opts.dryRun) {
+    console.log(`  ${dim("dry run — nothing is written. add")} ${bold("--fork")} ${dim("to write a cleaned session.")}`);
     nl();
   }
-  console.log(`  ${gray("run this inside your")} ${bold("live")} ${gray("Claude Code session:")}`);
-  nl();
-  console.log(`  ${cyan(wrap(command, 2))}`);
-  nl();
-  console.log(
-    opts.copied
-      ? `  ${green("✓ copied to clipboard")}`
-      : `  ${dim("(copy it manually — no clipboard tool found)")}`,
-  );
-  console.log(`  ${dim("Glassbox never compacts for you; it can't mutate a session. This just stages the command.")}`);
-  nl();
-}
 
-/** Soft-wrap a long string with a left indent, for the compact focus line. */
-function wrap(text: string, indent: number): string {
-  const pad = " ".repeat(indent);
-  const max = W - indent - 2;
-  const words = text.split(" ");
-  const lines: string[] = [];
-  let line = "";
-  for (const w of words) {
-    if ((line + " " + w).trim().length > max) {
-      lines.push(line.trim());
-      line = w;
-    } else {
-      line += " " + w;
-    }
+  console.log(`  ${bold("provable garbage")} ${gray("— removed losslessly into a cleaned copy:")}`);
+  nl();
+  for (const a of plan.actions.slice(0, 14)) {
+    const tag = rpad(yellow(DETAIL_TAG[a.detail]), 6 + 9); // +9 ANSI
+    const tok = lpad(bold(fmtTok(a.reclaimableTokens)), 7);
+    console.log(`  ${tag}  ${tok}  ${bold(a.path ?? a.detail)}`);
   }
-  if (line.trim()) lines.push(line.trim());
-  return lines.join("\n" + pad);
+  if (plan.actions.length > 14) {
+    console.log(`  ${dim(`  … and ${plan.actions.length - 14} more`)}`);
+  }
+  nl();
+
+  // class rollup
+  const byClass = new Map<ReclaimableDetail, { count: number; tokens: number }>();
+  for (const a of plan.actions) {
+    const e = byClass.get(a.detail) ?? { count: 0, tokens: 0 };
+    byClass.set(a.detail, { count: e.count + 1, tokens: e.tokens + a.reclaimableTokens });
+  }
+  for (const [detail, { count, tokens }] of byClass) {
+    console.log(`    ${gray(rpad(DETAIL_TAG[detail], 6))} ${dim(`${count}×`)}  ${bold(fmtTok(tokens))} tok`);
+  }
+  nl();
+
+  console.log(
+    `  ${dim("plan:")} ${bold(String(plan.actions.length))} copies` +
+    `  ${dim("·")}  ${bold(fmtTok(plan.reclaimableTokens))} tok removed` +
+    `  ${dim("·")}  ${green(fmtTok(plan.netReclaimedTokens) + " net reclaimed")}` +
+    `  ${dim("(after " + fmtTok(plan.tombstoneTokens) + " tombstones)")}`,
+  );
+  nl();
 }
 
 export interface SessionRow {

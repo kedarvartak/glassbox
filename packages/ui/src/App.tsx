@@ -113,7 +113,7 @@ function Hud({
         />
         <Quote k="Turns" v={m ? fmtInt(m.turnCount) : "—"} sub={m ? `${m.messageCount} msgs` : ""} />
         <Quote k="Tools" v={m ? fmtInt(m.toolCallCount) : "—"} sub={m ? `${m.fileOpCount} file ops` : ""} />
-        <Quote k="Fixes" v={detail ? fmtInt(detail.clean?.summary.actionCount ?? 0) : "—"} cls="amber" sub={detail?.clean?.compact ? "+compact" : "hygiene"} />
+        <Quote k="Evict" v={detail ? fmtInt(detail.clean?.summary.copies ?? 0) : "—"} cls="amber" sub={detail ? `${fmtTokens(detail.clean?.summary.netReclaimedTokens ?? 0)} net` : "lossless"} />
       </div>
     </header>
   );

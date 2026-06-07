@@ -242,95 +242,72 @@ function ReclaimablePanel({ r }: { r: SessionDetail["reclaimable"] }) {
   );
 }
 
+const EVICT_LABEL: Record<SessionDetail["clean"]["actions"][number]["detail"], string> = {
+  gone: "GONE",
+  "stale-drift": "DRIFT",
+  "stale-superseded": "OLD",
+  duplicate: "DUP",
+  "spent-tool": "SPENT",
+  "spent-mcp": "SPENT",
+};
+const EVICT_HEX: Record<string, string> = {
+  GONE: "#ff5765", DRIFT: "#ff9f43", OLD: "#b18cf2", DUP: "#5b8af5", SPENT: "#8a93a6",
+};
+
 function CleanerPanel({ clean }: { clean?: SessionDetail["clean"] }) {
-  const empty = !clean || (clean.actions.length === 0 && !clean.compact);
-  const stopN = clean ? clean.actions.filter((a) => a.type === "stop_referencing").length : 0;
-  const rereadN = clean ? clean.actions.filter((a) => a.type === "re_read").length : 0;
+  const empty = !clean || clean.actions.length === 0;
+  // roll up provable garbage by class for the KPI strip.
+  const byClass = new Map<string, { count: number; tokens: number }>();
+  for (const a of clean?.actions ?? []) {
+    const tag = EVICT_LABEL[a.detail];
+    const e = byClass.get(tag) ?? { count: 0, tokens: 0 };
+    byClass.set(tag, { count: e.count + 1, tokens: e.tokens + a.reclaimableTokens });
+  }
   return (
     <>
       <div className="pnl-h">
         <span className="bar" /><span className="t">Context Cleaner</span>
         <span className="hint">
-          {clean
-            ? `${clean.summary.actionCount} FIX${clean.summary.actionCount !== 1 ? "ES" : ""}${clean.compact ? " · COMPACT" : ""}`
-            : "—"}
+          {clean ? `${clean.summary.copies} COP${clean.summary.copies !== 1 ? "IES" : "Y"} · LOSSLESS` : "—"}
         </span>
       </div>
       <div className="pnl-body">
         {empty ? (
-          <div className="clean-empty">
-            ✓ NOTHING TO CLEAN — no deleted or drifted files, and the window isn’t garbage-heavy enough to compact.
-          </div>
+          <div className="clean-empty">✓ NOTHING TO CLEAN — no provable garbage in this session.</div>
         ) : (
           <div className="cln">
             {/* summary strip */}
             <div className="cln-kpis">
-              <div className="cln-kpi"><span className="k">stop</span><span className="v" style={{ color: "#ff5765" }}>{stopN}</span></div>
-              <div className="cln-kpi"><span className="k">re-read</span><span className="v" style={{ color: "#ff9f43" }}>{rereadN}</span></div>
-              <div className="cln-kpi"><span className="k">reclaimable</span><span className="v">{fmtTokens(clean!.summary.reclaimableTokens)}</span></div>
-              {clean!.summary.estimatedUsdSaved != null && (
-                <div className="cln-kpi"><span className="k">saves/turn</span><span className="v" style={{ color: "#25d07d" }}>~{fmtUsd(clean!.summary.estimatedUsdSaved)}</span></div>
-              )}
+              <div className="cln-kpi"><span className="k">copies</span><span className="v">{fmtInt(clean!.summary.copies)}</span></div>
+              <div className="cln-kpi"><span className="k">removed</span><span className="v">{fmtTokens(clean!.summary.reclaimableTokens)}</span></div>
+              <div className="cln-kpi"><span className="k">net reclaimed</span><span className="v" style={{ color: "#25d07d" }}>{fmtTokens(clean!.summary.netReclaimedTokens)}</span></div>
             </div>
 
-            <div className="cln-cols">
-              {/* left — file fixes */}
-              <div className="cln-col">
-                <div className="cln-col-h">
-                  <span className="cln-col-t">CLAUDE.md fixes</span>
-                  {clean!.actions.length > 0 && (
-                    <CopyButton label="COPY BLOCK" text={buildClaudeMdBlock(clean!.actions)} />
-                  )}
-                </div>
-                {clean!.actions.length === 0 ? (
-                  <div className="cln-none">No deleted or drifted files in the window.</div>
-                ) : (
-                  <div className="cln-fixes">
-                    {clean!.actions.map((a, i) => (
-                      <Tip key={i} content={<TipChip
-                        title={a.type === "stop_referencing" ? "STOP REFERENCING" : "RE-READ"}
-                        rows={[
-                          { k: a.path, v: fmtTokens(a.reclaimableTokens) },
-                          { k: a.reason },
-                        ]}
-                      />}>
-                        <div className="cln-fix">
-                          <span className={`act-verb ${a.type}`}>{a.type === "stop_referencing" ? "STOP" : "RE-READ"}</span>
-                          <span className="act-path">{a.path}</span>
-                          <span className="act-tok">{fmtTokens(a.reclaimableTokens)}</span>
-                        </div>
-                      </Tip>
-                    ))}
-                  </div>
-                )}
-              </div>
+            {/* class rollup chips */}
+            <div className="cln-cmp-chips" style={{ padding: "0 2px 6px" }}>
+              {[...byClass.entries()].map(([tag, { count, tokens }]) => (
+                <span className="chip" key={tag}>
+                  <i style={{ background: EVICT_HEX[tag] ?? "#8a93a6" }} />{tag} {count}× · {fmtTokens(tokens)}
+                </span>
+              ))}
+            </div>
 
-              {/* right — compact */}
-              <div className="cln-col">
-                <div className="cln-col-h">
-                  <span className="cln-col-t">Compact window</span>
-                  {clean!.compact && <CopyButton label="COPY CMD" text={clean!.compact.command} />}
-                </div>
-                {clean!.compact ? (
-                  <div className="cln-compact">
-                    <div className="cln-cmp-top">
-                      <span className="cln-cmp-pct">{fmtPct(clean!.compact.reclaimablePct)}</span>
-                      <span className="cln-cmp-pctlbl">of window<br />reclaimable</span>
-                      <div className="cln-cmp-chips">
-                        <span className="chip"><i style={{ background: "#b18cf2" }} />spent {fmtTokens(clean!.compact.spentTokens)}</span>
-                        <span className="chip"><i style={{ background: "#5b8af5" }} />dup {fmtTokens(clean!.compact.duplicateTokens)}</span>
-                        {clean!.compact.estimatedUsdSaved != null && (
-                          <span className="chip pos">saves ~{fmtUsd(clean!.compact.estimatedUsdSaved)}/t</span>
-                        )}
-                      </div>
+            {/* eviction list */}
+            <div className="cln-fixes">
+              {clean!.actions.map((a, i) => {
+                const tag = EVICT_LABEL[a.detail];
+                return (
+                  <Tip key={i} content={<TipChip title={tag} rows={[
+                    { sw: EVICT_HEX[tag] ?? "#8a93a6", k: a.path ?? a.detail, v: fmtTokens(a.reclaimableTokens) },
+                  ]} />}>
+                    <div className="cln-fix">
+                      <span className="act-verb" style={{ color: EVICT_HEX[tag] ?? "#8a93a6" }}>{tag}</span>
+                      <span className="act-path">{a.path ?? a.detail}</span>
+                      <span className="act-tok">{fmtTokens(a.reclaimableTokens)}</span>
                     </div>
-                    <div className="cln-cmd">{clean!.compact.command}</div>
-                    <div className="cln-cmp-note">Run inside your live Claude Code session — Glassbox can’t compact for you.</div>
-                  </div>
-                ) : (
-                  <div className="cln-none">Below the compact threshold — not worth a reset yet.</div>
-                )}
-              </div>
+                  </Tip>
+                );
+              })}
             </div>
           </div>
         )}
@@ -377,31 +354,3 @@ function TapePanel({ items }: { items: SessionDetail["reclaimable"]["items"] }) 
 
 /* ════════════════ helpers ════════════════ */
 
-function CopyButton({ label, text }: { label: string; text: string }) {
-  const [copied, setCopied] = useState(false);
-  const onCopy = () => {
-    navigator.clipboard?.writeText(text).then(
-      () => { setCopied(true); setTimeout(() => setCopied(false), 1500); },
-      () => setCopied(false),
-    );
-  };
-  return (
-    <button className={`copy-btn${copied ? " ok" : ""}`} onClick={onCopy} type="button">
-      {copied ? "✓ COPIED" : label}
-    </button>
-  );
-}
-
-function buildClaudeMdBlock(actions: SessionDetail["clean"]["actions"]): string {
-  const stop = actions.filter((a) => a.type === "stop_referencing");
-  const reread = actions.filter((a) => a.type === "re_read");
-  const lines: string[] = [
-    "<!-- glassbox:hygiene:start -->",
-    "## Context hygiene — Glassbox",
-    "These files drifted from or left the workspace after they entered context.",
-  ];
-  if (stop.length > 0) lines.push("", "**Deleted — do not read or reference:**", ...stop.map((a) => a.claudeMdSnippet));
-  if (reread.length > 0) lines.push("", "**Changed on disk — re-read before relying on the cached copy:**", ...reread.map((a) => a.claudeMdSnippet));
-  lines.push("<!-- glassbox:hygiene:end -->");
-  return lines.join("\n");
-}

@@ -9,7 +9,7 @@ import {
   checkTokenAccuracy,
   composition,
   FsRepoState,
-  plan,
+  planEviction,
   pricingFor,
 } from "@glassbox/analysis";
 import type { SessionIndex } from "@glassbox/store";
@@ -105,7 +105,7 @@ async function buildDetail(session: Session, tokens: TokenCounter, repo: FsRepoS
     ...(pricing ? { pricing } : {}),
   });
   const accuracy = checkTokenAccuracy(session, tokens);
-  const cleanPlan = plan(report, session);
+  const eviction = planEviction(report, snapshot);
 
   return {
     meta: {
@@ -177,30 +177,17 @@ async function buildDetail(session: Session, tokens: TokenCounter, repo: FsRepoS
       sampleResponses: accuracy.sampleResponses,
     },
     clean: {
-      actions: cleanPlan.claudeMdBlocks.map((a) => ({
-        type: a.type,
-        path: a.path,
-        reason: a.reason,
+      actions: eviction.actions.slice(0, 40).map((a) => ({
+        detail: a.detail,
+        path: a.path ?? null,
         reclaimableTokens: a.reclaimableTokens,
-        confidence: a.confidence,
-        claudeMdSnippet: a.claudeMdSnippet,
+        tombstoneTokens: a.tombstoneTokens,
       })),
-      compact: cleanPlan.compactRecommendation
-        ? {
-            reclaimablePct: cleanPlan.compactRecommendation.reclaimablePct,
-            reclaimableTokens: cleanPlan.compactRecommendation.reclaimableTokens,
-            spentTokens: cleanPlan.compactRecommendation.spentTokens,
-            duplicateTokens: cleanPlan.compactRecommendation.duplicateTokens,
-            suggestedSummaryFocus: cleanPlan.compactRecommendation.suggestedSummaryFocus,
-            estimatedUsdSaved: cleanPlan.compactRecommendation.estimatedUsdSaved,
-            command: `/compact ${cleanPlan.compactRecommendation.suggestedSummaryFocus}`,
-          }
-        : null,
       summary: {
-        actionCount: cleanPlan.summary.actionCount,
-        reclaimableTokens: cleanPlan.summary.reclaimableTokens,
-        reclaimablePct: cleanPlan.summary.reclaimablePct,
-        estimatedUsdSaved: cleanPlan.summary.estimatedUsdSaved,
+        copies: eviction.actions.length,
+        reclaimableTokens: eviction.reclaimableTokens,
+        tombstoneTokens: eviction.tombstoneTokens,
+        netReclaimedTokens: eviction.netReclaimedTokens,
       },
     },
   };

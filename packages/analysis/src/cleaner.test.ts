@@ -3,24 +3,12 @@ import {
   asIsoTimestamp,
   asMessageId,
   asSegmentId,
-  asSessionId,
   asToolCallId,
   type ContextSnapshot,
-  type Message,
   type Segment,
   type SegmentStatus,
-  type Session,
 } from "@glassbox/core";
-import {
-  compactCommand,
-  HYGIENE_END,
-  HYGIENE_START,
-  plan,
-  planEviction,
-  renderHygieneBlock,
-  suggestedCompactFocus,
-  upsertHygieneBlock,
-} from "./cleaner.js";
+import { planEviction, PROVABLE_CLASSES } from "./cleaner.js";
 import type { ReclaimableDetail, ReclaimableItem, ReclaimableReport } from "./reclaimable.js";
 
 function item(
@@ -56,219 +44,8 @@ function report(items: ReclaimableItem[], over: Partial<ReclaimableReport> = {})
   };
 }
 
-function msg(role: "user" | "assistant", id: string, text: string): Message {
-  return {
-    id: asMessageId(id),
-    parentId: null,
-    role,
-    timestamp: asIsoTimestamp("2026-06-04T00:00:00Z"),
-    blocks: text ? [{ kind: "text", text }] : [],
-    isSidechain: false,
-  };
-}
-
-function session(messages: Message[] = []): Session {
-  return {
-    id: asSessionId("s1"),
-    tool: "claude-code",
-    toolVersion: null,
-    projectPath: "/repo",
-    gitBranch: null,
-    startedAt: asIsoTimestamp("2026-06-04T00:00:00Z"),
-    endedAt: asIsoTimestamp("2026-06-04T00:00:09Z"),
-    messages,
-    turns: [],
-    toolCalls: [],
-    fileOps: [],
-    memoryOps: [],
-    compactions: [],
-    warnings: [],
-  };
-}
-
-describe("plan — CLAUDE.md actions", () => {
-  it("turns a gone file into a stop_referencing action", () => {
-    const r = report([item("gone", "gone", 100, { path: "/repo/old.ts" })]);
-    const p = plan(r, session());
-    expect(p.claudeMdBlocks).toHaveLength(1);
-    const a = p.claudeMdBlocks[0];
-    expect(a?.type).toBe("stop_referencing");
-    expect(a?.path).toBe("/repo/old.ts");
-    expect(a?.confidence).toBe("provable");
-    expect(a?.reclaimableTokens).toBe(100);
-    expect(a?.claudeMdSnippet).toContain("/repo/old.ts");
-    expect(a?.claudeMdSnippet).toContain("do not read");
-  });
-
-  it("turns a drifted file into a re_read action", () => {
-    const r = report([item("stale", "stale-drift", 80, { path: "/repo/changed.ts" })]);
-    const p = plan(r, session());
-    expect(p.claudeMdBlocks).toHaveLength(1);
-    expect(p.claudeMdBlocks[0]?.type).toBe("re_read");
-    expect(p.claudeMdBlocks[0]?.claudeMdSnippet).toContain("re-read");
-  });
-
-  it("does NOT action superseded / spent / duplicate items", () => {
-    const r = report([
-      item("stale", "stale-superseded", 50, { path: "/repo/app.ts" }),
-      item("spent", "spent-tool", 500, { label: "Bash result" }),
-      item("spent", "spent-mcp", 300, { label: "mcp__x result" }),
-      item("duplicate", "duplicate", 90, { path: "/repo/dup.ts" }),
-    ]);
-    const p = plan(r, session());
-    expect(p.claudeMdBlocks).toHaveLength(0);
-  });
-
-  it("dedupes multiple copies of the same path into one action, summing tokens", () => {
-    const r = report([
-      item("gone", "gone", 60, { path: "/repo/old.ts", label: "read old.ts" }),
-      item("gone", "gone", 40, { path: "/repo/old.ts", label: "write old.ts" }),
-    ]);
-    const p = plan(r, session());
-    expect(p.claudeMdBlocks).toHaveLength(1);
-    expect(p.claudeMdBlocks[0]?.reclaimableTokens).toBe(100);
-  });
-
-  it("sorts actions by reclaimable tokens, descending", () => {
-    const r = report([
-      item("gone", "gone", 30, { path: "/repo/a.ts" }),
-      item("gone", "gone", 300, { path: "/repo/b.ts" }),
-      item("stale", "stale-drift", 120, { path: "/repo/c.ts" }),
-    ]);
-    const p = plan(r, session());
-    expect(p.claudeMdBlocks.map((a) => a.path)).toEqual(["/repo/b.ts", "/repo/c.ts", "/repo/a.ts"]);
-  });
-});
-
-describe("plan — compact recommendation", () => {
-  it("omits the compact hint below the threshold", () => {
-    // 100 reclaimable of 1000 total = 10% < 25% default.
-    const r = report([item("spent", "spent-tool", 100)], { totalTokens: 1000 });
-    const p = plan(r, session());
-    expect(p.compactRecommendation).toBeUndefined();
-  });
-
-  it("emits a compact hint above the threshold with spent/duplicate breakdown", () => {
-    // 400 reclaimable of 1000 total = 40% > 25%.
-    const r = report(
-      [item("spent", "spent-tool", 300), item("duplicate", "duplicate", 100)],
-      { totalTokens: 1000, wastedUsdPerTurn: 0.02 },
-    );
-    const p = plan(r, session([msg("user", "u1", "Add a greet helper to app.ts")]));
-    expect(p.compactRecommendation).toBeDefined();
-    expect(p.compactRecommendation?.spentTokens).toBe(300);
-    expect(p.compactRecommendation?.duplicateTokens).toBe(100);
-    expect(p.compactRecommendation?.suggestedSummaryFocus).toContain("greet helper");
-    // all reclaimable is spent+duplicate → full per-turn waste is recoverable.
-    expect(p.compactRecommendation?.estimatedUsdSaved).toBeCloseTo(0.02);
-  });
-
-  it("respects a custom threshold", () => {
-    const r = report([item("spent", "spent-tool", 100)], { totalTokens: 1000 });
-    const p = plan(r, session(), { compactThreshold: 0.05 });
-    expect(p.compactRecommendation).toBeDefined();
-  });
-
-  it("falls back to a generic focus when there is no message text", () => {
-    const r = report([item("spent", "spent-tool", 500)], { totalTokens: 1000 });
-    const p = plan(r, session());
-    expect(p.compactRecommendation?.suggestedSummaryFocus).toMatch(/preserve/i);
-  });
-});
-
-describe("plan — summary", () => {
-  it("reports action count and reclaimable totals", () => {
-    const r = report(
-      [
-        item("gone", "gone", 100, { path: "/repo/a.ts" }),
-        item("stale", "stale-drift", 50, { path: "/repo/b.ts" }),
-        item("spent", "spent-tool", 200),
-      ],
-      { totalTokens: 1000, wastedUsdPerTurn: 0.01 },
-    );
-    const p = plan(r, session());
-    expect(p.summary.actionCount).toBe(2);
-    expect(p.summary.reclaimableTokens).toBe(350);
-    expect(p.summary.estimatedUsdSaved).toBe(0.01);
-  });
-});
-
-describe("upsertHygieneBlock — CLAUDE.md injection (Phase C)", () => {
-  const NOW = new Date("2026-06-06T12:00:00Z");
-  const goneAndDrift = () =>
-    plan(
-      report([
-        item("gone", "gone", 100, { path: "/repo/old.ts" }),
-        item("stale", "stale-drift", 80, { path: "/repo/changed.ts" }),
-      ]),
-      session(),
-    );
-
-  it("renders a block with both deleted and changed sections", () => {
-    const block = renderHygieneBlock(goneAndDrift(), NOW);
-    expect(block.startsWith(HYGIENE_START)).toBe(true);
-    expect(block.endsWith(HYGIENE_END)).toBe(true);
-    expect(block).toContain("do not read or reference");
-    expect(block).toContain("/repo/old.ts");
-    expect(block).toContain("re-read");
-    expect(block).toContain("/repo/changed.ts");
-    expect(block).toContain("2026-06-06T12:00:00Z");
-  });
-
-  it("appends the block to existing user content, preserving it", () => {
-    const existing = "# My project\n\nUse pnpm. Prefer small functions.\n";
-    const out = upsertHygieneBlock(existing, goneAndDrift(), NOW);
-    expect(out).toContain("# My project");
-    expect(out).toContain("Use pnpm.");
-    expect(out).toContain(HYGIENE_START);
-  });
-
-  it("is idempotent — applying twice yields byte-identical output", () => {
-    const existing = "# My project\n\nGuidelines here.\n";
-    const once = upsertHygieneBlock(existing, goneAndDrift(), NOW);
-    const twice = upsertHygieneBlock(once, goneAndDrift(), NOW);
-    expect(twice).toBe(once);
-  });
-
-  it("replaces an out-of-date block rather than stacking a second one", () => {
-    const existing = "# My project\n";
-    const first = upsertHygieneBlock(existing, goneAndDrift(), NOW);
-    // a later plan with a different set of files
-    const laterPlan = plan(report([item("gone", "gone", 50, { path: "/repo/other.ts" })]), session());
-    const second = upsertHygieneBlock(first, laterPlan, NOW);
-    expect(second.match(new RegExp(HYGIENE_START, "g"))).toHaveLength(1);
-    expect(second).toContain("/repo/other.ts");
-    expect(second).not.toContain("/repo/old.ts");
-  });
-
-  it("strips the managed block entirely when the window is clean", () => {
-    const existing = "# My project\n";
-    const withBlock = upsertHygieneBlock(existing, goneAndDrift(), NOW);
-    const cleanPlan = plan(report([item("spent", "spent-tool", 10)], { totalTokens: 1000 }), session());
-    const cleaned = upsertHygieneBlock(withBlock, cleanPlan, NOW);
-    expect(cleaned).not.toContain(HYGIENE_START);
-    expect(cleaned).toContain("# My project");
-  });
-});
-
-describe("compact command (Phase D)", () => {
-  it("builds a /compact slash command from the focus", () => {
-    const focus = suggestedCompactFocus(session([msg("user", "u1", "Fix the parser bug")]));
-    const cmd = compactCommand(focus);
-    expect(cmd.startsWith("/compact ")).toBe(true);
-    expect(cmd).toContain("Fix the parser bug");
-  });
-
-  it("focus matches the one carried in the plan's compact recommendation", () => {
-    const r = report([item("spent", "spent-tool", 400)], { totalTokens: 1000 });
-    const s = session([msg("user", "u1", "Ship the release")]);
-    const p = plan(r, s);
-    expect(p.compactRecommendation?.suggestedSummaryFocus).toBe(suggestedCompactFocus(s));
-  });
-});
-
-// A snapshot whose segment ids/paths line up with `item(...)` fixtures, so the
-// eviction planner can join report items back to their transcript location.
+/** A snapshot whose segment ids/paths line up with `item(...)`, so the eviction
+ * planner can join report items back to their transcript location. */
 function snapshotFor(items: ReclaimableItem[]): ContextSnapshot {
   const segments: Segment[] = items.map((it, i) => ({
     id: it.segmentId,
@@ -288,51 +65,54 @@ function snapshotFor(items: ReclaimableItem[]): ContextSnapshot {
   };
 }
 
-describe("superseded eviction (Layer 1)", () => {
-  it("plans an eviction for each superseded copy and reclaims net of tombstone cost", () => {
+describe("planEviction — provable, lossless cleanup", () => {
+  it("plans an eviction for each provable copy and reclaims net of tombstone cost", () => {
     const items = [
       item("stale", "stale-superseded", 2000, { path: "/repo/a.ts" }),
-      item("stale", "stale-superseded", 1000, { path: "/repo/b.ts" }),
+      item("gone", "gone", 1000, { path: "/repo/b.ts" }),
     ];
     const e = planEviction(report(items), snapshotFor(items));
     expect(e.actions).toHaveLength(2);
     expect(e.reclaimableTokens).toBe(3000);
     expect(e.tombstoneTokens).toBeGreaterThan(0);
     expect(e.netReclaimedTokens).toBe(3000 - e.tombstoneTokens);
-    // biggest copy first, and it carries the transcript location for the fork-writer.
+    // biggest copy first, carrying the transcript location for the fork-writer.
     expect(e.actions[0]?.reclaimableTokens).toBe(2000);
     expect(e.actions[0]?.originToolCallId).toBeDefined();
     expect(e.actions[0]?.tombstone).toContain("/repo/a.ts");
   });
 
-  it("by default touches only superseded — not gone/drift/spent/duplicate", () => {
+  it("evicts every provable class (gone/drift/superseded/duplicate) but NOT spent", () => {
     const items = [
-      item("stale", "stale-superseded", 500, { path: "/repo/old.ts" }),
-      item("gone", "gone", 400, { path: "/repo/dead.ts" }),
-      item("stale", "stale-drift", 300, { path: "/repo/changed.ts" }),
-      item("spent", "spent-tool", 200),
-      item("duplicate", "duplicate", 100),
+      item("gone", "gone", 500, { path: "/repo/dead.ts" }),
+      item("stale", "stale-drift", 400, { path: "/repo/changed.ts" }),
+      item("stale", "stale-superseded", 300, { path: "/repo/old.ts" }),
+      item("duplicate", "duplicate", 200, { path: "/repo/dup.ts" }),
+      item("spent", "spent-tool", 999), // heuristic — excluded by default
+      item("spent", "spent-mcp", 888), // heuristic — excluded by default
     ];
     const e = planEviction(report(items), snapshotFor(items));
-    expect(e.actions).toHaveLength(1);
-    expect(e.actions[0]?.detail).toBe("stale-superseded");
+    const evicted = new Set(e.actions.map((a) => a.detail));
+    expect(evicted).toEqual(new Set(PROVABLE_CLASSES));
+    expect(e.actions.some((a) => a.detail === "spent-tool")).toBe(false);
+    expect(e.actions.some((a) => a.detail === "spent-mcp")).toBe(false);
+    expect(e.reclaimableTokens).toBe(1400); // 500+400+300+200, no spent
   });
 
-  it("can be widened to also evict spent and duplicate (fork replaces /compact)", () => {
+  it("can opt into the spent heuristic for ~9% more coverage", () => {
     const items = [
-      item("stale", "stale-superseded", 500, { path: "/repo/old.ts" }),
+      item("gone", "gone", 500, { path: "/repo/dead.ts" }),
       item("spent", "spent-tool", 200),
-      item("duplicate", "duplicate", 100),
     ];
     const e = planEviction(report(items), snapshotFor(items), {
-      classes: ["stale-superseded", "spent-tool", "duplicate"],
+      classes: [...PROVABLE_CLASSES, "spent-tool"],
     });
-    expect(e.actions).toHaveLength(3);
-    expect(e.reclaimableTokens).toBe(800);
+    expect(e.actions).toHaveLength(2);
+    expect(e.reclaimableTokens).toBe(700);
   });
 
   it("skips items whose segment is absent from the snapshot (no location to evict)", () => {
-    const items = [item("stale", "stale-superseded", 500, { path: "/repo/x.ts" })];
+    const items = [item("gone", "gone", 500, { path: "/repo/x.ts" })];
     const e = planEviction(report(items), snapshotFor([])); // empty snapshot
     expect(e.actions).toHaveLength(0);
     expect(e.netReclaimedTokens).toBe(0);

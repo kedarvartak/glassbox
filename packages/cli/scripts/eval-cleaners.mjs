@@ -17,7 +17,6 @@ import { writeFileSync } from "node:fs";
 import { ClaudeCodeAdapter } from "@glassbox/adapter-claude-code";
 import {
   analyzeSessionReclaimable,
-  plan,
   planEviction,
   FsRepoState,
   pricingFor,
@@ -96,8 +95,7 @@ async function main() {
         tokens,
         ...(pricing ? { pricing } : {}),
       });
-      plan(report, session); // exercise the real planner (parity check; throws if shape breaks)
-      // Layer 1: surgical eviction plan for superseded copies (the third strategy).
+      // The single cleanup strategy: provable, lossless eviction.
       const eviction = planEviction(report, snapshot);
 
       // Coverage split: which strategy owns each reclaimable token.
