@@ -1,5 +1,11 @@
-import type { Session } from "@glassbox/core";
-import type { ReclaimableItem, ReclaimableReport } from "./reclaimable.js";
+import type {
+  ContextSnapshot,
+  MessageId,
+  Session,
+  SegmentId,
+  ToolCallId,
+} from "@glassbox/core";
+import type { ReclaimableDetail, ReclaimableItem, ReclaimableReport } from "./reclaimable.js";
 
 /**
  * The context cleaner — doc 21's "Advise" tier.
@@ -279,6 +285,133 @@ export function upsertHygieneBlock(existing: string, plan: CleanPlan, now: Date)
   const block = renderHygieneBlock(plan, now);
   if (stripped.trim() === "") return block + "\n";
   return `${stripped.replace(/\s+$/, "")}\n\n${block}\n`;
+}
+
+// ───────────────────────── Superseded eviction (Layer 1) ─────────────────────────
+
+/**
+ * The third strategy — closing the gap that neither CLAUDE.md injection nor
+ * `/compact` addresses cleanly: **stale-superseded** content (an older copy of a
+ * file a later read in the same session already replaced). The agent's knowledge
+ * is fresh, but the old copy still sits resident, billed every turn.
+ *
+ * Injection can't help (the file isn't gone/drifted — re-reading won't evict the
+ * old bytes) and `/compact` is overkill (it collapses the whole window). The
+ * precise fix is **surgical eviction**: in a *derived copy* of the transcript,
+ * replace just the superseded content with a tiny tombstone, preserving every
+ * message and tool_use/result pair so the cleaned transcript still loads.
+ *
+ * This layer is pure: it locates the evictable content and plans the tombstones.
+ * The fork-writer that materializes the cleaned `.jsonl` (Layer 2) lives in the
+ * CLI, gated behind explicit confirmation — and writes a *new* file, never the
+ * user's original. The read-only-on-transcripts rule is preserved.
+ */
+
+/** A surgical eviction of one resident garbage segment from a derived transcript. */
+export interface EvictAction {
+  readonly segmentId: SegmentId;
+  /** Where the stale content lives, so the fork-writer can find and replace it. */
+  readonly originMessageId: MessageId;
+  readonly originToolCallId?: ToolCallId;
+  readonly path?: string;
+  readonly detail: ReclaimableDetail;
+  /** Resident tokens this segment holds today (before the tombstone is added). */
+  readonly reclaimableTokens: number;
+  /** The stub that replaces the evicted content (preserves message structure). */
+  readonly tombstone: string;
+  /** Estimated tokens the tombstone itself costs (the price of staying loadable). */
+  readonly tombstoneTokens: number;
+}
+
+export interface EvictionPlan {
+  readonly actions: readonly EvictAction[];
+  /** Tokens the evicted content holds today. */
+  readonly reclaimableTokens: number;
+  /** Tokens the replacement tombstones cost. */
+  readonly tombstoneTokens: number;
+  /** Net tokens reclaimed = reclaimable − tombstones. */
+  readonly netReclaimedTokens: number;
+}
+
+export interface EvictionOptions {
+  /**
+   * Which reclaimable classes to evict surgically. Defaults to superseded only
+   * (the gap the other two strategies leave). `spent`/`duplicate` are *also*
+   * surgically evictable by the same fork mechanism — pass them here to make the
+   * fork a precise replacement for `/compact` on the resume path.
+   */
+  readonly classes?: readonly ReclaimableDetail[];
+}
+
+const DEFAULT_EVICT_CLASSES: readonly ReclaimableDetail[] = ["stale-superseded"];
+
+/**
+ * Plan the surgical eviction of resident garbage (default: superseded copies).
+ * Pure — no I/O. Joins the report's reclaimable items to their snapshot segments
+ * to recover the transcript location (`originMessageId`/`originToolCallId`) the
+ * fork-writer needs.
+ */
+export function planEviction(
+  report: ReclaimableReport,
+  snapshot: ContextSnapshot,
+  opts: EvictionOptions = {},
+): EvictionPlan {
+  const classes = new Set(opts.classes ?? DEFAULT_EVICT_CLASSES);
+  const segById = new Map(snapshot.segments.map((s) => [s.id, s]));
+
+  const actions: EvictAction[] = [];
+  for (const item of report.items) {
+    if (!item.detail || !classes.has(item.detail)) continue;
+    const seg = segById.get(item.segmentId);
+    if (!seg) continue;
+    const tombstone = renderTombstone(item.detail, item.path);
+    actions.push({
+      segmentId: item.segmentId,
+      originMessageId: seg.originMessageId,
+      ...(seg.originToolCallId !== undefined ? { originToolCallId: seg.originToolCallId } : {}),
+      ...(item.path ? { path: item.path } : {}),
+      detail: item.detail,
+      reclaimableTokens: item.tokens,
+      tombstone,
+      tombstoneTokens: estimateTokens(tombstone),
+    });
+  }
+
+  const reclaimableTokens = actions.reduce((s, a) => s + a.reclaimableTokens, 0);
+  const tombstoneTokens = actions.reduce((s, a) => s + a.tombstoneTokens, 0);
+  return {
+    actions: actions.sort((a, b) => b.reclaimableTokens - a.reclaimableTokens),
+    reclaimableTokens,
+    tombstoneTokens,
+    netReclaimedTokens: reclaimableTokens - tombstoneTokens,
+  };
+}
+
+/**
+ * The marker that replaces evicted content in the derived transcript. This text
+ * is what the model sees in place of the old bytes on the next resume, so it must
+ * (a) make clear the content was intentionally removed by tooling, and (b) point
+ * the model at where the current version is, so it neither re-reads needlessly
+ * nor treats the gap as an error.
+ *
+ * TODO(kedar): this wording is the product decision — tune it for how Claude
+ * actually behaves when it meets a stubbed tool_result on resume. Keep it short
+ * (every token here is token you didn't reclaim).
+ */
+function renderTombstone(detail: ReclaimableDetail, path?: string): string {
+  const where = path ? ` of ${path}` : "";
+  if (detail === "stale-superseded") {
+    return `[glassbox: removed a superseded copy${where}; a later read in this session holds the current version. Use that.]`;
+  }
+  if (detail === "duplicate") {
+    return `[glassbox: removed a duplicate${where}; the identical copy already in context is authoritative.]`;
+  }
+  return `[glassbox: removed spent output${where} that was never referenced again.]`;
+}
+
+/** Local ~4-chars/token estimate, matching the default TokenCounter. Pure. */
+function estimateTokens(text: string): number {
+  return Math.max(1, Math.ceil(text.length / 4));
 }
 
 /** Remove an existing Glassbox block (and its surrounding blank lines) if present. */

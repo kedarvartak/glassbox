@@ -4,7 +4,10 @@ import {
   asMessageId,
   asSegmentId,
   asSessionId,
+  asToolCallId,
+  type ContextSnapshot,
   type Message,
+  type Segment,
   type SegmentStatus,
   type Session,
 } from "@glassbox/core";
@@ -13,6 +16,7 @@ import {
   HYGIENE_END,
   HYGIENE_START,
   plan,
+  planEviction,
   renderHygieneBlock,
   suggestedCompactFocus,
   upsertHygieneBlock,
@@ -260,5 +264,77 @@ describe("compact command (Phase D)", () => {
     const s = session([msg("user", "u1", "Ship the release")]);
     const p = plan(r, s);
     expect(p.compactRecommendation?.suggestedSummaryFocus).toBe(suggestedCompactFocus(s));
+  });
+});
+
+// A snapshot whose segment ids/paths line up with `item(...)` fixtures, so the
+// eviction planner can join report items back to their transcript location.
+function snapshotFor(items: ReclaimableItem[]): ContextSnapshot {
+  const segments: Segment[] = items.map((it, i) => ({
+    id: it.segmentId,
+    source: "tool_result",
+    label: it.label,
+    sizeTokens: it.tokens,
+    originMessageId: asMessageId(`m${i}`),
+    originToolCallId: asToolCallId(`tc${i}`),
+    ...(it.path ? { path: it.path } : {}),
+    status: it.status,
+  }));
+  return {
+    atMessageId: asMessageId("latest"),
+    timestamp: asIsoTimestamp("2026-06-04T00:00:00Z"),
+    segments,
+    totalTokens: segments.reduce((s, x) => s + x.sizeTokens, 0) || 1,
+  };
+}
+
+describe("superseded eviction (Layer 1)", () => {
+  it("plans an eviction for each superseded copy and reclaims net of tombstone cost", () => {
+    const items = [
+      item("stale", "stale-superseded", 2000, { path: "/repo/a.ts" }),
+      item("stale", "stale-superseded", 1000, { path: "/repo/b.ts" }),
+    ];
+    const e = planEviction(report(items), snapshotFor(items));
+    expect(e.actions).toHaveLength(2);
+    expect(e.reclaimableTokens).toBe(3000);
+    expect(e.tombstoneTokens).toBeGreaterThan(0);
+    expect(e.netReclaimedTokens).toBe(3000 - e.tombstoneTokens);
+    // biggest copy first, and it carries the transcript location for the fork-writer.
+    expect(e.actions[0]?.reclaimableTokens).toBe(2000);
+    expect(e.actions[0]?.originToolCallId).toBeDefined();
+    expect(e.actions[0]?.tombstone).toContain("/repo/a.ts");
+  });
+
+  it("by default touches only superseded — not gone/drift/spent/duplicate", () => {
+    const items = [
+      item("stale", "stale-superseded", 500, { path: "/repo/old.ts" }),
+      item("gone", "gone", 400, { path: "/repo/dead.ts" }),
+      item("stale", "stale-drift", 300, { path: "/repo/changed.ts" }),
+      item("spent", "spent-tool", 200),
+      item("duplicate", "duplicate", 100),
+    ];
+    const e = planEviction(report(items), snapshotFor(items));
+    expect(e.actions).toHaveLength(1);
+    expect(e.actions[0]?.detail).toBe("stale-superseded");
+  });
+
+  it("can be widened to also evict spent and duplicate (fork replaces /compact)", () => {
+    const items = [
+      item("stale", "stale-superseded", 500, { path: "/repo/old.ts" }),
+      item("spent", "spent-tool", 200),
+      item("duplicate", "duplicate", 100),
+    ];
+    const e = planEviction(report(items), snapshotFor(items), {
+      classes: ["stale-superseded", "spent-tool", "duplicate"],
+    });
+    expect(e.actions).toHaveLength(3);
+    expect(e.reclaimableTokens).toBe(800);
+  });
+
+  it("skips items whose segment is absent from the snapshot (no location to evict)", () => {
+    const items = [item("stale", "stale-superseded", 500, { path: "/repo/x.ts" })];
+    const e = planEviction(report(items), snapshotFor([])); // empty snapshot
+    expect(e.actions).toHaveLength(0);
+    expect(e.netReclaimedTokens).toBe(0);
   });
 });

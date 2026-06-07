@@ -4,7 +4,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createInterface } from "node:readline/promises";
 import { homedir, platform } from "node:os";
 import { dirname, join } from "node:path";
-import { ClaudeCodeAdapter, claudeProjectsRoot } from "@glassbox/adapter-claude-code";
+import { ClaudeCodeAdapter, claudeProjectsRoot, forkTranscript } from "@glassbox/adapter-claude-code";
 import {
   analyzeSessionCost,
   analyzeSessionReclaimable,
@@ -14,6 +14,7 @@ import {
   PRICING_AS_OF,
   compactCommand,
   plan,
+  planEviction,
   pricingFor,
   suggestedCompactFocus,
   upsertHygieneBlock,
@@ -204,13 +205,13 @@ async function main(argv: string[]): Promise<number> {
     case "clean": {
       const locator = rest[0];
       if (!locator) {
-        console.error("usage: glassbox clean <session.jsonl> [--apply] [--yes] [--json]");
+        console.error("usage: glassbox clean <session.jsonl> [--apply] [--compact] [--fork] [--yes] [--json]");
         return 2;
       }
       const session = await adapter.parse({ tool: "claude-code", locator });
       const pricing = pricingFor(session.messages.find((m) => m.model)?.model);
       const model = session.messages.find((m) => m.model)?.model ?? "—";
-      const { report } = await analyzeSessionReclaimable(session, {
+      const { snapshot, report } = await analyzeSessionReclaimable(session, {
         repo: new FsRepoState(),
         tokens,
         ...(pricing ? { pricing } : {}),
@@ -224,6 +225,7 @@ async function main(argv: string[]): Promise<number> {
 
       const apply = rest.includes("--apply");
       const doCompact = rest.includes("--compact");
+      const doFork = rest.includes("--fork");
       const assumeYes = rest.includes("--yes") || rest.includes("-y");
 
       renderHeader({
@@ -240,7 +242,7 @@ async function main(argv: string[]): Promise<number> {
         memoryOpCount: session.memoryOps.length,
       }, model);
 
-      renderCleanPlan(cleanPlan, !apply && !doCompact);
+      renderCleanPlan(cleanPlan, !apply && !doCompact && !doFork);
 
       // ── Phase C: write the CLAUDE.md hygiene block (user-confirmed) ──
       if (apply) {
@@ -280,6 +282,74 @@ async function main(argv: string[]): Promise<number> {
           copied,
           belowThreshold: cleanPlan.compactRecommendation === undefined,
         });
+      }
+
+      // ── Layer 2: write a cleaned fork with superseded copies tombstoned ──
+      // Never mutates the original; produces a *new* <name>.cleaned.jsonl the
+      // user can `claude --resume` from with a lighter window.
+      if (doFork) {
+        const eviction = planEviction(report, snapshot);
+        const evictions = new Map<string, string>();
+        for (const a of eviction.actions) {
+          if (a.originToolCallId) evictions.set(a.originToolCallId, a.tombstone);
+        }
+        nl();
+        hr("CLEANED FORK (Layer 2)");
+        nl();
+        if (evictions.size === 0) {
+          console.log(gray("  nothing to evict — no superseded copies in this session."));
+          nl();
+          return 0;
+        }
+
+        const raw = safeRead(locator);
+        if (raw === "") {
+          console.log(red(`  cannot read transcript at ${locator}`));
+          return 1;
+        }
+        const { text, summary } = forkTranscript(raw, evictions);
+        const outPath = locator.endsWith(".jsonl")
+          ? locator.replace(/\.jsonl$/, ".cleaned.jsonl")
+          : `${locator}.cleaned.jsonl`;
+
+        console.log(`  ${bold("Source:")} ${dim(locator)}  ${dim("(untouched)")}`);
+        console.log(`  ${bold("Output:")} ${outPath}`);
+        console.log(`  tombstoned ${green(String(summary.evicted))} superseded ` +
+          `cop${summary.evicted === 1 ? "y" : "ies"}; ` +
+          `${fmtInt(eviction.netReclaimedTokens)} tokens net reclaimed`);
+        if (summary.notFound.length > 0) {
+          console.log(gray(`  (${summary.notFound.length} planned eviction(s) had no locatable bytes — skipped)`));
+        }
+        nl();
+
+        const ok = assumeYes || await confirm(`  Write cleaned fork to ${outPath}?`);
+        if (!ok) {
+          console.log(gray("  aborted — no file written."));
+          return 0;
+        }
+        writeFileSync(outPath, text, "utf8");
+        console.log(green(`  ✓ wrote ${outPath}`));
+
+        // Integrity proof: re-parse the fork and re-measure. If this throws, the
+        // rewrite broke the transcript; if it loads, resume is safe.
+        try {
+          const cleaned = await adapter.parse({ tool: "claude-code", locator: outPath });
+          const after = await analyzeSessionReclaimable(cleaned, {
+            repo: new FsRepoState(),
+            tokens,
+            ...(pricing ? { pricing } : {}),
+          });
+          const before = snapshot.totalTokens;
+          const now = after.snapshot.totalTokens;
+          console.log(green(`  ✓ fork re-parses cleanly (${cleaned.messages.length} messages intact)`));
+          console.log(`  context tokens  ${fmtTok(before)} → ${fmtTok(now)}  ` +
+            `(${fmtPct((before - now) / (before || 1))} lighter)`);
+        } catch (e) {
+          console.log(red(`  ! fork failed to re-parse: ${e instanceof Error ? e.message : String(e)}`));
+          console.log(red(`    the original is untouched; do not resume from the fork.`));
+          return 1;
+        }
+        nl();
       }
       return 0;
     }
@@ -397,7 +467,7 @@ async function main(argv: string[]): Promise<number> {
         ["inspect <session.jsonl>",        "full dashboard: stats + x-ray + cost + reclaimable"],
         ["xray <session.jsonl>",           "context composition by source + reclaimable tokens"],
         ["cost <session.jsonl>",           "cost breakdown from provider actuals"],
-        ["clean <session.jsonl>",          "hygiene plan; --apply writes CLAUDE.md, --compact stages /compact"],
+        ["clean <session.jsonl>",          "hygiene plan; --apply writes CLAUDE.md, --compact stages /compact, --fork writes a cleaned transcript"],
         ["sessions [--project <p>]",       "list indexed sessions (fast, no re-parse)"],
         ["index [--project <p>]",          "parse + incrementally index sessions into SQLite"],
         ["watch [--project <p>]",          "index then keep it live on file changes"],
