@@ -70,29 +70,44 @@ local estimate (about four characters per token) shown with an error bar.
 
 ## Quickstart
 
-```
-pnpm install
-pnpm build
+**Requires Node 22+.** One command installs everything and puts `glassbox` on your PATH:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/kedarvartak/glassbox/main/install.sh | bash
 ```
 
-The CLI is then at `packages/cli/dist/main.js`. To get a `glassbox` command, add a
-wrapper on your PATH:
+Or, if you have already cloned the repo:
+
+```bash
+./install.sh
+```
+
+Then:
 
 ```
-printf '#!/usr/bin/env bash\nexec node %s/packages/cli/dist/main.js "$@"\n' "$PWD" \
-  > ~/.local/bin/glassbox && chmod +x ~/.local/bin/glassbox
-
 glassbox list                              # find sessions on disk
 glassbox clean <session.jsonl>             # dry run: see the plan
 glassbox clean <session.jsonl> --fork      # write a cleaned session
 ```
 
-Then resume the cleaned session:
+Resume the cleaned session:
 
 ```
 cd <your project dir>
 claude --resume     # pick the newest session
 ```
+
+<details>
+<summary>Manual install (pnpm)</summary>
+
+```
+pnpm install
+pnpm build
+printf '#!/usr/bin/env bash\nexec node %s/packages/cli/dist/main.js "$@"\n' "$PWD" \
+  > ~/.local/bin/glassbox && chmod +x ~/.local/bin/glassbox
+```
+
+</details>
 
 <p align="center">
   <img src="assets/demos/clean.gif" alt="glassbox clean --fork — the lossless cleaner" width="900">
