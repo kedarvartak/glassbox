@@ -7,6 +7,8 @@
  */
 export * from "./reclaimable.js";
 export * from "./cleaner.js";
+export * from "./trim.js";
+export * from "./summarize-plan.js";
 export * from "./pricing.js";
 export * from "./cost.js";
 export * from "./token-accuracy.js";

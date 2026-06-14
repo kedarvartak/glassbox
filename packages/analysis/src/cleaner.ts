@@ -84,6 +84,21 @@ export const PROVABLE_CLASSES: readonly ReclaimableDetail[] = [
 ];
 
 /**
+ * Tier 1 classes — extends provable eviction with spent observation clearing.
+ * `spent-tool` / `spent-mcp` rest on an inference ("never referenced again"),
+ * not a proof, so they are excluded from the lossless default. Under a token
+ * budget that inference earns its keep: the tool *call* stays in the transcript
+ * so the model knows the action happened; only the heavy result bytes are cleared.
+ * Zero hallucination risk, no model call — the biggest single reclaimable mass
+ * in most sessions.
+ */
+export const TIER1_CLASSES: readonly ReclaimableDetail[] = [
+  ...PROVABLE_CLASSES,
+  "spent-tool",
+  "spent-mcp",
+];
+
+/**
  * Plan the surgical eviction of provable garbage. Pure — no I/O. Joins the
  * report's reclaimable items to their snapshot segments to recover the transcript
  * location (`originMessageId`/`originToolCallId`) the fork-writer needs.
