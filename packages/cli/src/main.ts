@@ -21,6 +21,7 @@ import {
   TIER1_CLASSES,
 } from "@glassbox/analysis";
 import { callSummarizer, SummarizerError } from "./summarize.js";
+import { runBench, generateProbes, extractApiMessages, MAX_PROBES, type BenchResult } from "./bench.js";
 
 const SUMMARIZE_MODEL_DISPLAY = "claude-haiku-4-5";
 
@@ -600,6 +601,134 @@ async function main(argv: string[]): Promise<number> {
       return 0;
     }
 
+    case "bench": {
+      const locator = rest[0] ?? await pickSession(adapter);
+      if (!locator) {
+        console.error("usage: glassbox bench <session.jsonl> [--vs <cleaned.jsonl>]");
+        return 2;
+      }
+
+      const apiKey = process.env["ANTHROPIC_API_KEY"];
+      if (!apiKey) {
+        console.error("ANTHROPIC_API_KEY not set — bench requires API access to replay probes.");
+        return 1;
+      }
+
+      const session = await adapter.parse({ tool: "claude-code", locator });
+      const pricing = pricingFor(session.messages.find((m) => m.model)?.model);
+      const { snapshot, report } = await analyzeSessionReclaimable(session, {
+        repo: new FsRepoState(),
+        tokens,
+        ...(pricing ? { pricing } : {}),
+      });
+
+      const originalRaw = safeRead(locator);
+      if (originalRaw === "") {
+        console.error(`cannot read transcript at ${locator}`);
+        return 1;
+      }
+
+      // Either use a provided cleaned fork or produce one in-memory.
+      const vsPath = flag(rest, "--vs");
+      let cleanedRaw: string;
+      let tokensBefore = snapshot.totalTokens;
+
+      if (vsPath) {
+        cleanedRaw = safeRead(vsPath);
+        if (cleanedRaw === "") {
+          console.error(`cannot read cleaned transcript at ${vsPath}`);
+          return 1;
+        }
+      } else {
+        // Run Tier 0+1 in-memory to get cleaned text (no file written).
+        const tier1 = planEviction(report, snapshot, { classes: TIER1_CLASSES });
+        const evictions = new Map<string, string>();
+        for (const a of tier1.actions) {
+          if (a.originToolCallId) evictions.set(a.originToolCallId, a.tombstone);
+        }
+        const { text } = forkTranscript(originalRaw, evictions, {});
+        cleanedRaw = text;
+      }
+
+      const tier1Plan = planEviction(report, snapshot, { classes: TIER1_CLASSES });
+      const probeCount = Math.min(tier1Plan.actions.filter((a) => a.originToolCallId).length, MAX_PROBES);
+
+      renderHeader({
+        sessionId: session.id,
+        projectPath: session.projectPath,
+        gitBranch: session.gitBranch,
+        toolVersion: session.toolVersion,
+        startedAt: session.startedAt,
+        endedAt: session.endedAt,
+        messageCount: session.messages.length,
+        turnCount: session.turns.length,
+        toolCallCount: session.toolCalls.length,
+        fileOpCount: session.fileOps.length,
+        memoryOpCount: session.memoryOps.length,
+      }, session.messages.find((m) => m.model)?.model ?? "—");
+
+      nl();
+      hr("COMPACTION BENCH");
+      nl();
+      console.log(`  ${bold("Source:")} ${dim(locator)}`);
+      if (vsPath) console.log(`  ${bold("Cleaned:")} ${dim(vsPath)}`);
+      console.log(`  ${bold("Context:")} ${fmtTok(tokensBefore)} tok  ·  ${bold(String(tier1Plan.actions.length))} cleaned segments`);
+      console.log(`  ${dim("Generating")} ${bold(String(probeCount))} ${dim(`probe${probeCount === 1 ? "" : "s"} — replaying into both transcripts via ${SUMMARIZE_MODEL_DISPLAY}…`)}`);
+      nl();
+
+      let result: BenchResult;
+      try {
+        result = await runBench(
+          originalRaw, cleanedRaw, session, tier1Plan,
+          tokensBefore, 0, apiKey,
+        );
+      } catch (e) {
+        console.error(red(`  bench failed: ${e instanceof Error ? e.message : String(e)}`));
+        return 1;
+      }
+
+      // ── Per-probe output ──────────────────────────────────────────────────
+      for (const r of result.probes) {
+        const icon = r.verdict === "equivalent" ? green("✓") :
+                     r.verdict === "partial"    ? yellow("⚠") : red("✗");
+        const label = r.verdict === "equivalent" ? green("equivalent") :
+                      r.verdict === "partial"    ? yellow("partial")    : red("degraded");
+
+        console.log(`  ${icon} ${bold(r.probe.toolName.padEnd(12))} ${dim(`[${r.probe.cleanedDetail}]`)}`);
+        console.log(`    ${dim("Q:")} ${r.probe.question}`);
+        console.log(`    ${dim("original:")}  ${r.originalAnswer.slice(0, 120).replace(/\n/g, " ")}`);
+        console.log(`    ${dim("cleaned:")}   ${r.cleanedAnswer.slice(0, 120).replace(/\n/g, " ")}`);
+        console.log(`    ${label}  ${dim("—")}  ${r.reason}`);
+        nl();
+      }
+
+      if (result.probes.length === 0) {
+        console.log(gray("  no probeable tool calls found in the eviction plan."));
+        nl();
+        return 0;
+      }
+
+      // ── Summary ───────────────────────────────────────────────────────────
+      hr("VERDICT");
+      nl();
+      console.log(
+        `  ${green(String(result.equivalent))} equivalent` +
+        `  ${yellow(String(result.partial))} partial` +
+        `  ${red(String(result.degraded))} degraded` +
+        `  ${dim("/")}  ${result.probes.length} probes`,
+      );
+
+      const overallVerdict = result.degraded > 0
+        ? red("✗  degraded — compaction removed content the model still needed")
+        : result.partial > 0
+          ? yellow("⚠  partial — some detail lost, but no critical information missing")
+          : green("✓  safe — all cleaned content was genuinely garbage");
+      console.log(`  ${overallVerdict}`);
+      nl();
+
+      return result.degraded > 0 ? 1 : 0;
+    }
+
     case "index": {
       const index = SessionIndex.open(openDbPath(flag(rest, "--db")));
       try {
@@ -737,6 +866,7 @@ async function main(argv: string[]): Promise<number> {
         ["cost <session.jsonl>",           "cost breakdown from provider actuals"],
         ["clean <session.jsonl>",          "eviction plan of provable garbage; --fork writes a cleaned, lossless session"],
         ["compact <session.jsonl>",        "tier 0–3: evicts garbage, clears spent outputs, trims cold bulk, summarizes cold reasoning; --fork writes result"],
+        ["bench <session.jsonl>",          "eval compaction quality: replay probes into original + cleaned, judge whether answers degrade"],
         ["sessions [--project <p>]",       "list indexed sessions (fast, no re-parse)"],
         ["index [--project <p>]",          "parse + incrementally index sessions into SQLite"],
         ["watch [--project <p>]",          "index then keep it live on file changes"],
