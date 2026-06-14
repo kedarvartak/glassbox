@@ -355,11 +355,25 @@ function sendJson(res: ServerResponse, status: number, payload: unknown): void {
   res.end(JSON.stringify(payload));
 }
 
-/** Locate the built UI (`@glassbox/ui/dist`) via module resolution. */
+/**
+ * Locate the built UI assets. Two layouts are supported:
+ *  - npm install (bundled):  dist/main.js is the bundle, UI lives at dist/ui/
+ *  - dev (workspace):        resolve @glassbox/ui via the package registry
+ */
 function resolveUiDist(): string {
-  const require = createRequire(import.meta.url);
-  const pkg = require.resolve("@glassbox/ui/package.json");
-  return join(dirname(pkg), "dist");
+  const req = createRequire(import.meta.url);
+
+  // Bundled npm install: ui/ is a sibling of main.js inside dist/
+  const bundledPath = join(dirname(new URL(import.meta.url).pathname), "ui");
+  try {
+    const { statSync } = req("node:fs") as typeof import("node:fs");
+    statSync(join(bundledPath, "index.html"));
+    return bundledPath;
+  } catch {
+    // Fall back to workspace resolution for local dev
+    const pkg = req.resolve("@glassbox/ui/package.json");
+    return join(dirname(pkg), "dist");
+  }
 }
 
 /** Best-effort: ensure a file exists; used to warn if the UI isn't built. */
