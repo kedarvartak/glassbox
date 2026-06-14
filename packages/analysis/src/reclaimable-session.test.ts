@@ -188,7 +188,11 @@ describe("analyzeSessionReclaimable — spent (one-shot tool output)", () => {
       toolCalls: [bash],
       // Turn 1 contains the bash output; turn 2 is the latest (agent moved on).
       turns: [
-        { index: 0, userMessageId: asMessageId("a1"), messageIds: [asMessageId("a1"), asMessageId("u1b")] },
+        {
+          index: 0,
+          userMessageId: asMessageId("a1"),
+          messageIds: [asMessageId("a1"), asMessageId("u1b")],
+        },
         { index: 1, userMessageId: asMessageId("a2"), messageIds: [asMessageId("a2")] },
       ],
     };

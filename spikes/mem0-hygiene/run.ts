@@ -36,7 +36,10 @@ async function main(): Promise<void> {
 
   console.log(`▸ embedding memories for near-duplicate detection…`);
   const embeddings = await embedAll(memories.map((m) => m.text));
-  const embedded: EmbeddedMemory[] = memories.map((m, i) => ({ ...m, embedding: embeddings[i] ?? [] }));
+  const embedded: EmbeddedMemory[] = memories.map((m, i) => ({
+    ...m,
+    embedding: embeddings[i] ?? [],
+  }));
 
   console.log(`▸ running ${seed.probes.length} probe queries for the dead-memory set…`);
   const retrieved = new Set<string>();
@@ -62,7 +65,9 @@ function printReport(r: ReturnType<typeof buildReport>): void {
   console.log(`\n  Bloat`);
   console.log(`    stored memories ........ ${r.storedCount}`);
   console.log(`    expected unique facts .. ${r.expectedUniqueFacts}`);
-  console.log(`    bloat ratio ............ ${r.bloatRatio.toFixed(2)}×  ${r.bloatRatio > 1.3 ? "⚠ bloated" : "ok"}`);
+  console.log(
+    `    bloat ratio ............ ${r.bloatRatio.toFixed(2)}×  ${r.bloatRatio > 1.3 ? "⚠ bloated" : "ok"}`,
+  );
 
   console.log(`\n  Surviving near-duplicates (cosine ≥ ${NEAR_DUP_THRESHOLD})`);
   if (r.nearDuplicateClusters.length === 0) {
@@ -102,6 +107,6 @@ function printReport(r: ReturnType<typeof buildReport>): void {
 }
 
 main().catch((err: unknown) => {
-  console.error(err instanceof Error ? err.stack ?? err.message : String(err));
+  console.error(err instanceof Error ? (err.stack ?? err.message) : String(err));
   process.exitCode = 1;
 });

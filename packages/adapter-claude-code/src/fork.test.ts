@@ -23,7 +23,10 @@ const TOMB = "[glassbox: removed superseded copy]";
 
 describe("forkTranscript (Layer 2 rewriter)", () => {
   it("stubs a Read's tool_result content, leaving the block and id intact", () => {
-    const raw = [toolUse("t1", "Read", { file_path: "/a.ts" }), toolResult("t1", "OLD FILE BYTES")].join("\n");
+    const raw = [
+      toolUse("t1", "Read", { file_path: "/a.ts" }),
+      toolResult("t1", "OLD FILE BYTES"),
+    ].join("\n");
     const { text, summary } = forkTranscript(raw, new Map([["t1", TOMB]]));
 
     expect(summary.evicted).toBe(1);
@@ -43,7 +46,13 @@ describe("forkTranscript (Layer 2 rewriter)", () => {
       toolUse("w1", "Write", { file_path: "/a.ts", content: "WRITTEN BODY" }),
       toolUse("e1", "Edit", { file_path: "/b.ts", old_string: "x", new_string: "EDITED BODY" }),
     ].join("\n");
-    const { text, summary } = forkTranscript(raw, new Map([["w1", TOMB], ["e1", TOMB]]));
+    const { text, summary } = forkTranscript(
+      raw,
+      new Map([
+        ["w1", TOMB],
+        ["e1", TOMB],
+      ]),
+    );
 
     expect(summary.evicted).toBe(2);
     expect(text).not.toContain("WRITTEN BODY");
@@ -55,7 +64,9 @@ describe("forkTranscript (Layer 2 rewriter)", () => {
 
   it("leaves non-evicted lines byte-for-byte identical", () => {
     const keep = toolResult("keep", "IMPORTANT LIVE OUTPUT");
-    const raw = [toolUse("t1", "Read", { file_path: "/a.ts" }), toolResult("t1", "OLD"), keep].join("\n");
+    const raw = [toolUse("t1", "Read", { file_path: "/a.ts" }), toolResult("t1", "OLD"), keep].join(
+      "\n",
+    );
     const { text } = forkTranscript(raw, new Map([["t1", TOMB]]));
     expect(text.split("\n")[2]).toBe(keep); // untouched line unchanged
   });
@@ -71,8 +82,14 @@ describe("forkTranscript (Layer 2 rewriter)", () => {
     const raw = JSON.stringify({
       type: "user",
       uuid: "r1",
-      message: { role: "user", content: [{ type: "tool_result", tool_use_id: "t1", content: "OLD FILE BYTES" }] },
-      toolUseResult: { type: "text", file: { filePath: "/a.ts", content: "OLD FILE BYTES", numLines: 1 } },
+      message: {
+        role: "user",
+        content: [{ type: "tool_result", tool_use_id: "t1", content: "OLD FILE BYTES" }],
+      },
+      toolUseResult: {
+        type: "text",
+        file: { filePath: "/a.ts", content: "OLD FILE BYTES", numLines: 1 },
+      },
     });
     const { text } = forkTranscript(raw, new Map([["t1", TOMB]]));
     const ev = JSON.parse(text);

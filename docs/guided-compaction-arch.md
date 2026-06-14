@@ -3,7 +3,7 @@
 This is the architectural decision for how Glassbox compacts. It builds on
 [guided-compaction.md](guided-compaction.md), which introduced the vocabulary
 (disposition, the manifest, the boundary, the synthetic preamble). That doc
-answered *what the pieces are*. This one answers *how they fit together*, and
+answered _what the pieces are_. This one answers _how they fit together_, and
 why — measured against how the rest of the field solves the same problem.
 
 The goal is stated plainly: **keep the maximum amount of what the agent actually
@@ -13,20 +13,20 @@ model rewrite a fact it could get wrong.** Accuracy first, size second.
 ## What the field taught us
 
 Seven teams shipped seven different compactors in late 2025 / early 2026. Read
-across them and the disagreements are loud, but the *findings* underneath are
+across them and the disagreements are loud, but the _findings_ underneath are
 remarkably consistent, and they point one direction.
 
 - **Compression ratio is a vanity metric.** Factory.ai benchmarked 36,000
   production messages: OpenAI, Anthropic, and Factory all compress to ~99%, and
-  the ratio predicts nothing about quality. What separates them is *what
-  survives*. Instruction-following survives almost perfectly (4.9/5 across the
+  the ratio predicts nothing about quality. What separates them is _what
+  survives_. Instruction-following survives almost perfectly (4.9/5 across the
   board). **Artifact tracking is broken** (2.2–2.45/5): models forget which
   files they changed, what error codes they saw, what signatures they modified.
   The narrative lives; the operational specifics die.
 - **Bigger models are worse compressors.** The LLM Scaling Paradox names two
-  mechanisms that worsen with scale: *knowledge overwriting* (the model replaces
+  mechanisms that worsen with scale: _knowledge overwriting_ (the model replaces
   a stated fact with a learned prior — "white strawberry" becomes "red") and
-  *semantic drift* (paraphrase flips meaning — "Alice hit Bob" becomes "Bob hit
+  _semantic drift_ (paraphrase flips meaning — "Alice hit Bob" becomes "Bob hit
   Alice"). You cannot buy your way out of bad compaction with a bigger model.
 - **Verbatim beats summary on accuracy.** Morph deletes tokens instead of
   rewriting them: lower ratio (50–70%), but 98% verbatim accuracy and zero
@@ -41,7 +41,7 @@ remarkably consistent, and they point one direction.
 - **Compaction should be a last resort, triggered at a boundary.** Claude Code
   layers cheaper operations (just-in-time retrieval, tool-result clearing)
   ahead of full compaction, and Managed Agents made the session an append-only
-  event log where compaction is a *runtime transformation*, never a destructive
+  event log where compaction is a _runtime transformation_, never a destructive
   edit. LangChain exposes compaction as a tool the agent fires at task
   boundaries, never mid-refactor at a fixed token threshold.
 - **Keep the original; make lossy recoverable.** Cursor writes full history to a
@@ -49,7 +49,7 @@ remarkably consistent, and they point one direction.
   compression made lossless by a sidecar.
 
 Every one of these findings rewards exactly what Glassbox already is: a tool that
-reasons from *proof*, preserves bytes verbatim, and never modifies the original.
+reasons from _proof_, preserves bytes verbatim, and never modifies the original.
 The architecture below is what you get when you take the field's hard-won lessons
 seriously instead of chasing the ratio.
 
@@ -57,7 +57,7 @@ seriously instead of chasing the ratio.
 
 The single most important architectural choice is **ordering**. Most of the
 field summarizes first and protects a few things from the summarizer. Glassbox
-inverts that: it exhausts every lossless and verbatim method *before* a model is
+inverts that: it exhausts every lossless and verbatim method _before_ a model is
 allowed to rewrite a single token. Summarization is the floor of the ladder, not
 the default.
 
@@ -86,7 +86,7 @@ This is the field's biggest safe win and Glassbox is already wired for it. The
 Complexity Trap result and Claude Code's "tool-result clearing" agree: the
 **reasoning chain matters more than the observations**, and observations are
 re-derivable. Glassbox segments by `source`, so it can make exactly this cut —
-keep assistant reasoning and tool *calls* intact, clear the heavy tool *results*
+keep assistant reasoning and tool _calls_ intact, clear the heavy tool _results_
 that are spent and sit outside the working set.
 
 This is the `spent` class the cleaner already detects but excludes from the
@@ -99,7 +99,7 @@ sessions (~101k tokens of spent tool output in the spike session).
 
 ### Tier 2 — Verbatim line-trim (the Morph rung)
 
-For a segment that is still *live* but large and cold — a 40k-token file read the
+For a segment that is still _live_ but large and cold — a 40k-token file read the
 agent hasn't touched in twenty turns, a long log — do not summarize it. Delete
 the boring lines **verbatim**, keeping a structurally chosen skeleton: the head,
 the tail, and the lines that carry artifacts (signatures, paths, error strings,
@@ -109,7 +109,7 @@ This is Morph's bet rendered in Glassbox terms: it is better to keep 50% of a
 block perfectly than a 100% summary that might invent a file path. Because the
 survivors are verbatim, **artifact tracking — the thing summarization breaks — is
 preserved exactly.** A line-trim is still lossy (you dropped lines), so it is
-below the verbatim-deletion tier, but it carries no *fabrication* risk, which is
+below the verbatim-deletion tier, but it carries no _fabrication_ risk, which is
 why it sits above any summarization.
 
 ### Tier 3 — Guided summarization, last resort and fact-bypassed
@@ -123,10 +123,10 @@ finding:
   never artifacts, never garbage (already gone in Tier 0). Bounded discretion
   means bounded damage.
 - **Facts bypass the model entirely** (see the artifact ledger below). Factory's
-  artifact-tracking failure happens because the model is asked to *carry* facts
+  artifact-tracking failure happens because the model is asked to _carry_ facts
   through a paraphrase. Glassbox never asks it to. Paths, signatures, error
   codes, test outcomes, and decisions are extracted and preserved verbatim
-  *around* the summarizer; the model only compresses the connective reasoning,
+  _around_ the summarizer; the model only compresses the connective reasoning,
   where paraphrase is acceptable.
 - **Structured extraction, not free-form prose.** The summarizer's task is
   "emit decisions, open questions, and findings as a list," not "write a
@@ -173,8 +173,8 @@ The ledger splits cleanly along Glassbox's provable/inferred line:
   **alongside** the pristine original (the original is never modified), so any
   soft artifact can be audited against, or recovered from, the real record.
 
-The ledger is the spine of every lossy tier. Tier 1 clears an observation *only
-after* its artifacts are in the ledger. Tier 3 hands the summarizer the cold
+The ledger is the spine of every lossy tier. Tier 1 clears an observation _only
+after_ its artifacts are in the ledger. Tier 3 hands the summarizer the cold
 prose but keeps the ledger out of its reach and re-attaches it verbatim
 afterward. The digest may be lossy; the ledger never is. This is what lets
 Glassbox claim what no competitor does: **the operational specifics survive
@@ -188,14 +188,14 @@ These hold across every tier and are the reason the ladder is safe.
 never optimizes for "how small." It optimizes for "how much of what matters
 survived," subject to fitting under the budget. The headline metric is
 artifact-and-decision retention, not bytes saved. A compaction that hits the
-budget at Tier 1 is *better* than one that goes to Tier 3 for a smaller file,
+budget at Tier 1 is _better_ than one that goes to Tier 3 for a smaller file,
 because it touched less and risked nothing.
 
 **2. The original is append-only; every compaction is a fresh derivation.**
 Glassbox already writes a new sibling and never opens the original for writing.
 Elevate that to a hard architectural rule, matching Anthropic's Managed Agents:
-the original transcript is an immutable event log. Compaction is a *pure function
-of the original log*, recomputed from scratch every time. This single rule kills
+the original transcript is an immutable event log. Compaction is a _pure function
+of the original log_, recomputed from scratch every time. This single rule kills
 Amp's drift problem outright — there is no "summary of a summary" because there
 is never a summary in the input, only the pristine log. Re-compacting a session
 re-derives from the original, not from the last compaction.
@@ -210,8 +210,8 @@ fix for knowledge-overwriting and semantic drift.
 and a token delta, and because the original is intact, every lossy decision is
 reversible by re-deriving from the log. This is Cursor's "lossy made lossless via
 a sidecar," except the sidecar is the untouched original Glassbox already keeps.
-It is also the observability surface no competitor offers: you can *see* and
-*override* what the compactor decided before it runs, and *diff* the result
+It is also the observability surface no competitor offers: you can _see_ and
+_override_ what the compactor decided before it runs, and _diff_ the result
 against both the original and against what a naive summarize-everything pass
 would have produced.
 
@@ -220,7 +220,7 @@ auto-compact fires whenever the window is full, including mid-refactor — the
 worst moment, per LangChain. Glassbox can see the working set and the active-edit
 set, so it can detect "is the agent mid-task?" and defer, or expose compaction as
 a boundary action the agent/user invokes after results are extracted. Compaction
-should land *between* units of work, never inside one.
+should land _between_ units of work, never inside one.
 
 **6. Cache-aware composition.** The economic argument in [idea.md](idea.md) is
 cache-read billing per turn, and Manus and Google both treat the KV-cache as
@@ -229,13 +229,13 @@ preserve-prefix (instructions, ledger, working set) forms a contiguous,
 cacheable head, and the volatile digest sits behind it. A compaction then
 behaves as a cache-friendly reset rather than a cache-buster.
 
-## What we deliberately do *not* do
+## What we deliberately do _not_ do
 
 - **We do not train a model to self-summarize (Cursor's RL).** It is the
   strongest single result in the field, but it requires a proprietary training
   pipeline and reward data Glassbox does not have, and it hides the decision
   inside opaque weights — the opposite of an observability tool's value. Glassbox
-  competes on *transparency and provability*, not a better black box.
+  competes on _transparency and provability_, not a better black box.
 - **We do not chase 99% ratios.** That number is where artifact tracking goes to
   die. We will ship a lower ratio and a higher retention score and argue the
   retention score is the only one that matters.
@@ -267,8 +267,8 @@ parse
 ## Why this is good enough
 
 It is good enough because it makes the failure the whole field shares —
-artifact-tracking collapse under summarization — *structurally impossible* for
-the classes Glassbox can prove or extract, and *minimized* for the rest by only
+artifact-tracking collapse under summarization — _structurally impossible_ for
+the classes Glassbox can prove or extract, and _minimized_ for the rest by only
 summarizing prose a small model after every fact has been lifted out. It keeps
 the maximum amount of memory by deleting in order of certainty: provable garbage
 first, spent observations next, cold bulk by verbatim trim, and only the cold

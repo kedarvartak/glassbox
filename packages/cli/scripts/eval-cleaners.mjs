@@ -139,7 +139,9 @@ async function main() {
         },
       });
     } catch (e) {
-      console.log(`  ! skip ${ref.locator.split("/").pop()}: ${e instanceof Error ? e.message : e}`);
+      console.log(
+        `  ! skip ${ref.locator.split("/").pop()}: ${e instanceof Error ? e.message : e}`,
+      );
     }
   }
 
@@ -209,17 +211,31 @@ function printAggregate(rows) {
   console.log("\n══ CORPUS TOTALS ════════════════════════════════════════");
   console.log(`  sessions analyzed     ${rows.length}`);
   console.log(`  context tokens        ${k(totalCtx)}`);
-  console.log(`  reclaimable tokens    ${k(totalRecl)}  (${pct(totalRecl / (totalCtx || 1))} of context)`);
+  console.log(
+    `  reclaimable tokens    ${k(totalRecl)}  (${pct(totalRecl / (totalCtx || 1))} of context)`,
+  );
 
   console.log("\n  ── DOES IT WORK? predicted effectiveness ──");
   console.log(`  1. problem size       ${pct(totalRecl / (totalCtx || 1))} of context is garbage`);
-  console.log(`  2. detection trust    ${pct(provable / (totalRecl || 1))} of garbage is PROVABLE (rest is the spent heuristic)`);
-  console.log(`  3. mechanism reach    ${pct(actionableToday / (totalRecl || 1))} of garbage a solution can now clear`);
-  console.log(`        ├ injection     ${pct(inj / (totalRecl || 1))}  (gone + stale-drift, provable)`);
+  console.log(
+    `  2. detection trust    ${pct(provable / (totalRecl || 1))} of garbage is PROVABLE (rest is the spent heuristic)`,
+  );
+  console.log(
+    `  3. mechanism reach    ${pct(actionableToday / (totalRecl || 1))} of garbage a solution can now clear`,
+  );
+  console.log(
+    `        ├ injection     ${pct(inj / (totalRecl || 1))}  (gone + stale-drift, provable)`,
+  );
   console.log(`        ├ /compact      ${pct(cmp / (totalRecl || 1))}  (spent + duplicate)`);
-  console.log(`        └ eviction NEW  ${pct(self / (totalRecl || 1))}  (stale-superseded, surgical fork+tombstone)`);
-  console.log(`  4. eviction detail    ${evictCount} copies tombstoned; ${k(evictTomb)} tok tombstone cost → ${k(evictNet)} tok net reclaimed`);
-  console.log(`  5. net context win    cleaning all addressable garbage shrinks context by ${pct((inj + cmp + evictNet) / (totalCtx || 1))}`);
+  console.log(
+    `        └ eviction NEW  ${pct(self / (totalRecl || 1))}  (stale-superseded, surgical fork+tombstone)`,
+  );
+  console.log(
+    `  4. eviction detail    ${evictCount} copies tombstoned; ${k(evictTomb)} tok tombstone cost → ${k(evictNet)} tok net reclaimed`,
+  );
+  console.log(
+    `  5. net context win    cleaning all addressable garbage shrinks context by ${pct((inj + cmp + evictNet) / (totalCtx || 1))}`,
+  );
 
   console.log("\n  ── projected $ saved (priced sessions only; horizon = projectSavings) ──");
   console.log(`  via CLAUDE.md inject  ${usd(injProj)}`);

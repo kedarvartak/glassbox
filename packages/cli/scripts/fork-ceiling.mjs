@@ -23,7 +23,9 @@ for (const ref of refs) {
     const session = await adapter.parse({ tool: "claude-code", locator: ref.locator });
     const pricing = pricingFor(session.messages.find((m) => m.model)?.model);
     const { snapshot, report } = await analyzeSessionReclaimable(session, {
-      repo, tokens, ...(pricing ? { pricing } : {}),
+      repo,
+      tokens,
+      ...(pricing ? { pricing } : {}),
     });
     const reclaimableIds = new Set(report.items.map((i) => i.segmentId));
     totalCtx += snapshot.totalTokens;
@@ -39,19 +41,27 @@ const k = (n) => (n >= 1000 ? (n / 1000).toFixed(1) + "k" : String(n));
 const pc = (n) => ((n / totalCtx) * 100).toFixed(1) + "%";
 
 console.log(`\nFork ceiling across ${refs.length} sessions (${k(totalCtx)} ctx tokens)\n`);
-console.log(`  fork removes (all detected garbage)   ${k(detectedGarbage)}  ${pc(detectedGarbage)}`);
+console.log(
+  `  fork removes (all detected garbage)   ${k(detectedGarbage)}  ${pc(detectedGarbage)}`,
+);
 const liveTotal = Object.values(liveBySource).reduce((a, b) => a + b, 0);
 console.log(`  fork CANNOT touch (live residual)     ${k(liveTotal)}  ${pc(liveTotal)}\n`);
 
 // Conversational live = semantically compressible by /compact; the rest is
 // (mostly) necessary scaffolding.
 const CONVO = new Set(["assistant", "thinking", "history", "user"]);
-let convo = 0, scaffold = 0;
+let convo = 0,
+  scaffold = 0;
 console.log("  live residual by source (what a fork leaves behind):");
 for (const [src, tok] of Object.entries(liveBySource).sort((a, b) => b[1] - a[1])) {
   const tag = CONVO.has(src) ? "  ← only /compact can shrink this" : "";
-  if (CONVO.has(src)) convo += tok; else scaffold += tok;
+  if (CONVO.has(src)) convo += tok;
+  else scaffold += tok;
   console.log(`    ${src.padEnd(12)} ${k(tok).padStart(7)}  ${pc(tok).padStart(6)}${tag}`);
 }
-console.log(`\n  of the residual: ${k(convo)} (${pc(convo)}) is stale-able conversation only /compact reaches;`);
-console.log(`                   ${k(scaffold)} (${pc(scaffold)}) is system/tools/current scaffolding.\n`);
+console.log(
+  `\n  of the residual: ${k(convo)} (${pc(convo)}) is stale-able conversation only /compact reaches;`,
+);
+console.log(
+  `                   ${k(scaffold)} (${pc(scaffold)}) is system/tools/current scaffolding.\n`,
+);

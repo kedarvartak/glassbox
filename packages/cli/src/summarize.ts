@@ -31,10 +31,7 @@ export class SummarizerError extends Error {
  *
  * Returns the digest string, or throws `SummarizerError` on API failure.
  */
-export async function callSummarizer(
-  coldText: string,
-  ledger: string,
-): Promise<string> {
+export async function callSummarizer(coldText: string, ledger: string): Promise<string> {
   const apiKey = process.env["ANTHROPIC_API_KEY"];
   if (!apiKey) {
     throw new SummarizerError(

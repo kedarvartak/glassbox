@@ -97,7 +97,12 @@ export function analyzeSessionCost(
       message.usage.cacheReadTokens,
       pricing.inputPerMTok - pricing.cacheReadPerMTok,
     );
-    records.push({ messageId: message.id, model: pricing.model, usage: message.usage, costUsd: c.totalUsd });
+    records.push({
+      messageId: message.id,
+      model: pricing.model,
+      usage: message.usage,
+      costUsd: c.totalUsd,
+    });
   }
 
   return {

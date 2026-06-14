@@ -11,12 +11,7 @@
  * "unknown formats → partial results, never a crash") instead of throwing.
  */
 
-export type SourceTool =
-  | "claude-code"
-  | "codex"
-  | "cursor"
-  | "cline"
-  | (string & {});
+export type SourceTool = "claude-code" | "codex" | "cursor" | "cline" | (string & {});
 
 /**
  * Where a resident chunk of context came from. Mirrors the categories Claude

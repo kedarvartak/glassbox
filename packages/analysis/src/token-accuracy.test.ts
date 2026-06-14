@@ -90,7 +90,12 @@ describe("checkTokenAccuracy", () => {
 
   it("reports honestly when there is no plain-text response to calibrate against", () => {
     const session = sessionOf([
-      msg("c1", "MC", [{ kind: "tool_use", toolCallId: asToolCallId("t1"), name: "Read", input: {} }], 20),
+      msg(
+        "c1",
+        "MC",
+        [{ kind: "tool_use", toolCallId: asToolCallId("t1"), name: "Read", input: {} }],
+        20,
+      ),
     ]);
     const r = checkTokenAccuracy(session, counter);
     expect(r.ratio).toBeNull();

@@ -97,60 +97,62 @@ export function Sidebar({ sessions, selected, onSelect }: Props) {
 
       {/* ── session list ── */}
       <div className="sb-list">
-        {collapsed
-          ? sessions.slice(0, 30).map((s) => {
-              const title = basename(s.projectPath) || s.sessionId.slice(0, 8);
-              const color = avatarColor(title);
-              return (
-                <button
-                  key={s.locator}
-                  className={`sb-mini${s.locator === selected ? " active" : ""}`}
-                  onClick={() => onSelect(s.locator)}
-                  title={`${title} · ${timeAgo(s.endedAt)}`}
-                  type="button"
-                >
-                  <span className="sb-av" style={{ background: color }}>
-                    {title.charAt(0).toUpperCase()}
-                  </span>
-                </button>
-              );
-            })
-          : groups.length === 0
-            ? <div className="sb-empty">No sessions match</div>
-            : groups.map((g) => (
-                <div className="sb-group" key={g.label}>
-                  <div className="sb-gh">{g.label}</div>
-                  {g.items.map((s) => {
-                    const color = avatarColor(s.title);
-                    return (
-                      <button
-                        key={s.locator}
-                        className={`sb-row${s.locator === selected ? " active" : ""}`}
-                        onClick={() => onSelect(s.locator)}
-                        title={s.projectPath}
-                        type="button"
-                      >
-                        <span className="sb-av" style={{ background: color }}>
-                          {s.title.charAt(0).toUpperCase()}
-                        </span>
-                        <span className="sb-row-body">
-                          <span className="sb-row-top">
-                            <span className="sb-title">{s.title}</span>
-                            <span className="sb-ago">{s.ago}</span>
-                          </span>
-                          <span className="sb-row-meta">
-                            <span className="sb-chip">{s.messageCount} msgs</span>
-                            <span className="sb-chip">{s.toolCallCount} tools</span>
-                            {s.memoryOpCount > 0 && (
-                              <span className="sb-chip mem">{s.memoryOpCount} mem</span>
-                            )}
-                          </span>
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              ))}
+        {collapsed ? (
+          sessions.slice(0, 30).map((s) => {
+            const title = basename(s.projectPath) || s.sessionId.slice(0, 8);
+            const color = avatarColor(title);
+            return (
+              <button
+                key={s.locator}
+                className={`sb-mini${s.locator === selected ? " active" : ""}`}
+                onClick={() => onSelect(s.locator)}
+                title={`${title} · ${timeAgo(s.endedAt)}`}
+                type="button"
+              >
+                <span className="sb-av" style={{ background: color }}>
+                  {title.charAt(0).toUpperCase()}
+                </span>
+              </button>
+            );
+          })
+        ) : groups.length === 0 ? (
+          <div className="sb-empty">No sessions match</div>
+        ) : (
+          groups.map((g) => (
+            <div className="sb-group" key={g.label}>
+              <div className="sb-gh">{g.label}</div>
+              {g.items.map((s) => {
+                const color = avatarColor(s.title);
+                return (
+                  <button
+                    key={s.locator}
+                    className={`sb-row${s.locator === selected ? " active" : ""}`}
+                    onClick={() => onSelect(s.locator)}
+                    title={s.projectPath}
+                    type="button"
+                  >
+                    <span className="sb-av" style={{ background: color }}>
+                      {s.title.charAt(0).toUpperCase()}
+                    </span>
+                    <span className="sb-row-body">
+                      <span className="sb-row-top">
+                        <span className="sb-title">{s.title}</span>
+                        <span className="sb-ago">{s.ago}</span>
+                      </span>
+                      <span className="sb-row-meta">
+                        <span className="sb-chip">{s.messageCount} msgs</span>
+                        <span className="sb-chip">{s.toolCallCount} tools</span>
+                        {s.memoryOpCount > 0 && (
+                          <span className="sb-chip mem">{s.memoryOpCount} mem</span>
+                        )}
+                      </span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          ))
+        )}
       </div>
 
       {/* ── footer status ── */}

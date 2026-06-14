@@ -130,8 +130,9 @@ export class SessionIndex {
 
   /** Full session (metadata + model), or null if not indexed. */
   get(locator: string): IndexedSession | null {
-    const row = this.db.prepare(`SELECT * FROM sessions WHERE locator = ?`).get(locator) as
-      | unknown as SessionRow | undefined;
+    const row = this.db
+      .prepare(`SELECT * FROM sessions WHERE locator = ?`)
+      .get(locator) as unknown as SessionRow | undefined;
     if (!row) return null;
     return { ...rowToMeta(row), session: JSON.parse(row.model_json) as Session };
   }

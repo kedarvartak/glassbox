@@ -51,7 +51,7 @@ export const seed: Seed = {
   contradictions: [
     {
       topic: "primary editor",
-      staleText: "VS Code",   // if this survives in the store, reconciliation failed
+      staleText: "VS Code", // if this survives in the store, reconciliation failed
       currentText: "Neovim",
     },
   ],

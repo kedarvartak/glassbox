@@ -28,9 +28,15 @@ function item(
   };
 }
 
-function report(items: ReclaimableItem[], over: Partial<ReclaimableReport> = {}): ReclaimableReport {
+function report(
+  items: ReclaimableItem[],
+  over: Partial<ReclaimableReport> = {},
+): ReclaimableReport {
   const reclaimableTokens = items.reduce((s, i) => s + i.tokens, 0);
-  const byStatus = { live: 0, gone: 0, stale: 0, spent: 0, duplicate: 0, unknown: 0 } as Record<SegmentStatus, number>;
+  const byStatus = { live: 0, gone: 0, stale: 0, spent: 0, duplicate: 0, unknown: 0 } as Record<
+    SegmentStatus,
+    number
+  >;
   for (const i of items) byStatus[i.status] += i.tokens;
   const totalTokens = over.totalTokens ?? (reclaimableTokens * 2 || 1);
   return {

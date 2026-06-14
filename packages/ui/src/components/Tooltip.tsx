@@ -7,7 +7,11 @@ import { createPortal } from "react-dom";
  * <Tip> wrappers — works for both HTML elements and SVG chart shapes.
  */
 
-interface TipState { content: ReactNode; x: number; y: number }
+interface TipState {
+  content: ReactNode;
+  x: number;
+  y: number;
+}
 type ShowFn = (content: ReactNode | null, x?: number, y?: number) => void;
 
 const TipCtx = createContext<ShowFn>(() => {});
@@ -19,7 +23,10 @@ export function TooltipProvider({ children }: { children: ReactNode }) {
   const [tip, setTip] = useState<TipState | null>(null);
 
   const show = useCallback<ShowFn>((content, x = 0, y = 0) => {
-    if (content == null) { setTip(null); return; }
+    if (content == null) {
+      setTip(null);
+      return;
+    }
     const left = Math.min(x + 14, window.innerWidth - EST_W);
     const top = Math.min(y + 14, window.innerHeight - EST_H);
     setTip({ content, x: Math.max(8, left), y: Math.max(8, top) });
@@ -28,10 +35,13 @@ export function TooltipProvider({ children }: { children: ReactNode }) {
   return (
     <TipCtx.Provider value={show}>
       {children}
-      {tip && createPortal(
-        <div className="tip" style={{ left: tip.x, top: tip.y }}>{tip.content}</div>,
-        document.body,
-      )}
+      {tip &&
+        createPortal(
+          <div className="tip" style={{ left: tip.x, top: tip.y }}>
+            {tip.content}
+          </div>,
+          document.body,
+        )}
     </TipCtx.Provider>
   );
 }
@@ -41,7 +51,11 @@ export function TooltipProvider({ children }: { children: ReactNode }) {
  * shapes (renders a <g>); otherwise renders a display:contents <span> so it
  * doesn't disturb grid/flex layout.
  */
-export function Tip({ content, children, svg = false }: {
+export function Tip({
+  content,
+  children,
+  svg = false,
+}: {
   content: ReactNode;
   children: ReactNode;
   svg?: boolean;
@@ -51,13 +65,20 @@ export function Tip({ content, children, svg = false }: {
     onMouseMove: (e: { clientX: number; clientY: number }) => show(content, e.clientX, e.clientY),
     onMouseLeave: () => show(null),
   };
-  return svg
-    ? <g {...handlers}>{children}</g>
-    : <span className="tip-wrap" {...handlers}>{children}</span>;
+  return svg ? (
+    <g {...handlers}>{children}</g>
+  ) : (
+    <span className="tip-wrap" {...handlers}>
+      {children}
+    </span>
+  );
 }
 
 /** Standard chip content: optional title + colored key/value rows. */
-export function TipChip({ title, rows }: {
+export function TipChip({
+  title,
+  rows,
+}: {
   title?: string;
   rows: { sw?: string; k: string; v?: string }[];
 }) {

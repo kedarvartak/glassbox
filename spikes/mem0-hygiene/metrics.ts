@@ -71,7 +71,10 @@ export function findNearDuplicateClusters(
     let minSim = 1;
     for (let a = 0; a < idxs.length; a++) {
       for (let b = a + 1; b < idxs.length; b++) {
-        minSim = Math.min(minSim, cosine(memories[idxs[a]!]!.embedding, memories[idxs[b]!]!.embedding));
+        minSim = Math.min(
+          minSim,
+          cosine(memories[idxs[a]!]!.embedding, memories[idxs[b]!]!.embedding),
+        );
       }
     }
     clusters.push({ members: idxs.map((i) => memories[i]!), minSimilarity: minSim });

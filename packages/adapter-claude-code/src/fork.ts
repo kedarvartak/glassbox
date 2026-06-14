@@ -147,7 +147,11 @@ function stubMirror(event: { toolUseResult?: unknown }, tomb: string): void {
   const obj = tur as Record<string, unknown>;
   // Read shape: { type, file: { content, … } }
   const file = obj["file"];
-  if (file && typeof file === "object" && typeof (file as Record<string, unknown>)["content"] === "string") {
+  if (
+    file &&
+    typeof file === "object" &&
+    typeof (file as Record<string, unknown>)["content"] === "string"
+  ) {
     (file as Record<string, unknown>)["content"] = tomb;
   }
   // Bash shape: { stdout, stderr, … }; generic shape: { content }

@@ -58,7 +58,11 @@ export function validateTranscript(rawText: string): ValidationReport {
     try {
       ev = JSON.parse(line);
     } catch {
-      problems.push({ code: "bad-json", ref: `line:${i + 1}`, detail: `line ${i + 1} is not valid JSON` });
+      problems.push({
+        code: "bad-json",
+        ref: `line:${i + 1}`,
+        detail: `line ${i + 1} is not valid JSON`,
+      });
       return;
     }
 
@@ -68,7 +72,12 @@ export function validateTranscript(rawText: string): ValidationReport {
 
     if (isTree) {
       const id = uuid as string;
-      if (uuids.has(id)) problems.push({ code: "duplicate-uuid", ref: id, detail: `uuid ${id} appears more than once` });
+      if (uuids.has(id))
+        problems.push({
+          code: "duplicate-uuid",
+          ref: id,
+          detail: `uuid ${id} appears more than once`,
+        });
       uuids.add(id);
       const parent = ev["parentUuid"];
       if (typeof parent === "string") parentRefs.push({ uuid: id, parent });
@@ -87,7 +96,11 @@ export function validateTranscript(rawText: string): ValidationReport {
     messages++;
 
     if (content.length === 0) {
-      problems.push({ code: "empty-content", ref: String(uuid ?? `line:${i + 1}`), detail: `message has empty content[]` });
+      problems.push({
+        code: "empty-content",
+        ref: String(uuid ?? `line:${i + 1}`),
+        detail: `message has empty content[]`,
+      });
     }
 
     for (const block of content as Record<string, unknown>[]) {
@@ -95,7 +108,11 @@ export function validateTranscript(rawText: string): ValidationReport {
         toolUses++;
         const id = block["id"];
         if (typeof id !== "string" || id === "") {
-          problems.push({ code: "tool_use-no-id", ref: String(uuid ?? `line:${i + 1}`), detail: `tool_use block missing id` });
+          problems.push({
+            code: "tool_use-no-id",
+            ref: String(uuid ?? `line:${i + 1}`),
+            detail: `tool_use block missing id`,
+          });
         } else {
           toolUseIds.add(id);
         }
@@ -104,9 +121,14 @@ export function validateTranscript(rawText: string): ValidationReport {
         const id = block["tool_use_id"];
         if (typeof id === "string") toolResultIds.add(id);
         const c = block["content"];
-        const empty = c === undefined || c === null || c === "" || (Array.isArray(c) && c.length === 0);
+        const empty =
+          c === undefined || c === null || c === "" || (Array.isArray(c) && c.length === 0);
         if (empty) {
-          problems.push({ code: "empty-tool_result", ref: typeof id === "string" ? id : `line:${i + 1}`, detail: `tool_result has empty content` });
+          problems.push({
+            code: "empty-tool_result",
+            ref: typeof id === "string" ? id : `line:${i + 1}`,
+            detail: `tool_result has empty content`,
+          });
         }
       }
     }
@@ -115,16 +137,30 @@ export function validateTranscript(rawText: string): ValidationReport {
   // parentUuid must reference a uuid present in the file (no dangling links).
   for (const { uuid, parent } of parentRefs) {
     if (!uuids.has(parent)) {
-      problems.push({ code: "dangling-parent", ref: uuid, detail: `parentUuid ${parent} of ${uuid} not found` });
+      problems.push({
+        code: "dangling-parent",
+        ref: uuid,
+        detail: `parentUuid ${parent} of ${uuid} not found`,
+      });
     }
   }
 
   // tool_use ↔ tool_result pairing — the API's hardest requirement.
   for (const id of toolUseIds) {
-    if (!toolResultIds.has(id)) problems.push({ code: "orphan-tool_use", ref: id, detail: `tool_use ${id} has no matching tool_result` });
+    if (!toolResultIds.has(id))
+      problems.push({
+        code: "orphan-tool_use",
+        ref: id,
+        detail: `tool_use ${id} has no matching tool_result`,
+      });
   }
   for (const id of toolResultIds) {
-    if (!toolUseIds.has(id)) problems.push({ code: "orphan-tool_result", ref: id, detail: `tool_result ${id} has no matching tool_use` });
+    if (!toolUseIds.has(id))
+      problems.push({
+        code: "orphan-tool_result",
+        ref: id,
+        detail: `tool_result ${id} has no matching tool_use`,
+      });
   }
 
   return {
@@ -141,7 +177,10 @@ export function validateTranscript(rawText: string): ValidationReport {
  * Problems present in `fork` but not in `original`, keyed by `code:ref`. These are
  * the only ones the fork is responsible for — the gate the fork-writer must pass.
  */
-export function newProblems(original: ValidationReport, fork: ValidationReport): ValidationProblem[] {
+export function newProblems(
+  original: ValidationReport,
+  fork: ValidationReport,
+): ValidationProblem[] {
   const before = new Set(original.problems.map((p) => `${p.code}:${p.ref}`));
   return fork.problems.filter((p) => !before.has(`${p.code}:${p.ref}`));
 }
