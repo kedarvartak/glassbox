@@ -51,11 +51,11 @@ avoids the accuracy loss that summarizing compaction causes.
 Measured across 57 Claude Code sessions of at least 150 KB, 2.3M context tokens
 total:
 
-| Metric | Value |
-|---|---|
-| Provably reclaimable | 1.37M tokens (59.5% of context) |
+| Metric                    | Value                                      |
+| ------------------------- | ------------------------------------------ |
+| Provably reclaimable      | 1.37M tokens (59.5% of context)            |
 | Net reclaimed by the fork | 1.29M tokens (55.9%, after tombstone cost) |
-| Copies tombstoned | 2,051 |
+| Copies tombstoned         | 2,051                                      |
 
 One real session, end to end:
 
@@ -136,16 +136,16 @@ while cost and history stay exactly the same — nothing was summarized.
 
 ## Commands
 
-| Command | What it does |
-|---|---|
-| `glassbox serve` | index sessions and open the web inspector |
-| `glassbox inspect <s>` | full dashboard: stats, x-ray, cost, reclaimable |
-| `glassbox xray <s>` | window composition by source and reclaimable tokens |
-| `glassbox cost <s>` | cost breakdown from provider actuals |
-| `glassbox clean <s> [--fork]` | eviction plan; `--fork` writes a cleaned session |
-| `glassbox sessions` | list indexed sessions |
-| `glassbox index` / `watch` | build or live-update the index |
-| `glassbox list` / `parse <s>` | discover sessions; dump the parsed model |
+| Command                       | What it does                                        |
+| ----------------------------- | --------------------------------------------------- |
+| `glassbox serve`              | index sessions and open the web inspector           |
+| `glassbox inspect <s>`        | full dashboard: stats, x-ray, cost, reclaimable     |
+| `glassbox xray <s>`           | window composition by source and reclaimable tokens |
+| `glassbox cost <s>`           | cost breakdown from provider actuals                |
+| `glassbox clean <s> [--fork]` | eviction plan; `--fork` writes a cleaned session    |
+| `glassbox sessions`           | list indexed sessions                               |
+| `glassbox index` / `watch`    | build or live-update the index                      |
+| `glassbox list` / `parse <s>` | discover sessions; dump the parsed model            |
 
 ## Safety
 

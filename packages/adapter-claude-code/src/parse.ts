@@ -16,12 +16,7 @@ import type {
   TokenUsage,
   Turn,
 } from "@glassbox/core";
-import {
-  asIsoTimestamp,
-  asMessageId,
-  asSessionId,
-  asToolCallId,
-} from "@glassbox/core";
+import { asIsoTimestamp, asMessageId, asSessionId, asToolCallId } from "@glassbox/core";
 import {
   isTreeEvent,
   type RawBlock,
@@ -182,9 +177,10 @@ function buildBlocks(
 ): BuiltMessage {
   // system / attachment events have no `message`; preserve them losslessly.
   if (ev.type === "system" || ev.type === "attachment") {
-    const rawKind = ev.type === "system"
-      ? `system:${(ev as { subtype?: string }).subtype ?? "?"}`
-      : `attachment:${(ev as { attachment?: { type?: string } }).attachment?.type ?? "?"}`;
+    const rawKind =
+      ev.type === "system"
+        ? `system:${(ev as { subtype?: string }).subtype ?? "?"}`
+        : `attachment:${(ev as { attachment?: { type?: string } }).attachment?.type ?? "?"}`;
     return {
       blocks: [{ kind: "unknown", rawKind, raw: ev }],
       usage: undefined,
@@ -519,12 +515,9 @@ function buildCompactions(
     const tokensAfter = usagePoints.find((u) => u.idx > compactIdx)?.total ?? 0;
 
     // Evicted = messages since the previous compaction (or session start).
-    const prevCompactIdx = h > 0
-      ? (msgIdx.get(asMessageId((hints[h - 1] as CompactionHint).uuid)) ?? -1)
-      : -1;
-    const evictedMessageIds = messages
-      .slice(prevCompactIdx + 1, compactIdx)
-      .map((m) => m.id);
+    const prevCompactIdx =
+      h > 0 ? (msgIdx.get(asMessageId((hints[h - 1] as CompactionHint).uuid)) ?? -1) : -1;
+    const evictedMessageIds = messages.slice(prevCompactIdx + 1, compactIdx).map((m) => m.id);
 
     events.push({
       id: asMessageId(hint.uuid),

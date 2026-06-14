@@ -183,11 +183,18 @@ function trimContent(
 
 function shrinkMirror(event: { toolUseResult?: unknown }, trimmed: string): void {
   const tur = event.toolUseResult;
-  if (typeof tur === "string") { event.toolUseResult = trimmed; return; }
+  if (typeof tur === "string") {
+    event.toolUseResult = trimmed;
+    return;
+  }
   if (tur === null || typeof tur !== "object") return;
   const obj = tur as Record<string, unknown>;
   const file = obj["file"];
-  if (file && typeof file === "object" && typeof (file as Record<string, unknown>)["content"] === "string") {
+  if (
+    file &&
+    typeof file === "object" &&
+    typeof (file as Record<string, unknown>)["content"] === "string"
+  ) {
     (file as Record<string, unknown>)["content"] = trimmed;
   }
   for (const key of ["stdout", "stderr", "content"]) {

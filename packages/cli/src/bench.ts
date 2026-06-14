@@ -80,8 +80,11 @@ export function generateProbes(
     const inp = tc.input as Record<string, unknown>;
     const command = typeof inp["command"] === "string" ? inp["command"] : undefined;
     const filePath =
-      typeof inp["file_path"] === "string" ? inp["file_path"] :
-      typeof inp["path"] === "string" ? inp["path"] : undefined;
+      typeof inp["file_path"] === "string"
+        ? inp["file_path"]
+        : typeof inp["path"] === "string"
+          ? inp["path"]
+          : undefined;
     const pattern = typeof inp["pattern"] === "string" ? inp["pattern"] : undefined;
 
     let question: string;
@@ -134,7 +137,11 @@ export function extractApiMessages(rawText: string): ApiMessage[] {
   for (const line of rawText.split("\n")) {
     if (line.trim() === "") continue;
     let ev: unknown;
-    try { ev = JSON.parse(line); } catch { continue; }
+    try {
+      ev = JSON.parse(line);
+    } catch {
+      continue;
+    }
 
     const event = ev as Record<string, unknown>;
     if (event["type"] !== "user" && event["type"] !== "assistant") continue;
@@ -225,22 +232,24 @@ export async function replayProbe(
  *   REASON: one sentence
  * ──────────────────────────────────────────────────────────────────────────────
  */
-function buildJudgePrompt(
-  probe: ProbeQuestion,
-  original: string,
-  cleaned: string,
-): string {
+function buildJudgePrompt(probe: ProbeQuestion, original: string, cleaned: string): string {
   // Spell out what the cleaned model is allowed to not know, per eviction type.
   const detailContext: Record<string, string> = {
-    "spent-tool":       "The output was classified as spent (never referenced again) and tombstoned. The cleaned model may not recall the output — saying 'that output was cleaned, I can re-run' is CORRECT behavior and counts as equivalent.",
-    "spent-mcp":        "The MCP tool output was classified as spent and tombstoned. Same rule as spent-tool: deferral is correct and counts as equivalent.",
-    "stale-superseded": "A later read in the same session holds the current version. The cleaned model should still know the content from that later read. If it can't answer, that is degraded.",
-    "stale-drift":      "The file changed on disk after it was read. The cleaned model should know the copy it read is outdated and say so — 'the file may have changed, I should re-read' is equivalent. Confidently stating stale content as current is degraded.",
-    "gone":             "The file was deleted. The cleaned model should know the file no longer exists. Saying 'that file is gone' is equivalent. Not knowing the file is gone is degraded.",
-    "duplicate":        "A duplicate copy was removed but an identical copy remains in context. The cleaned model should still know the content from the surviving copy.",
+    "spent-tool":
+      "The output was classified as spent (never referenced again) and tombstoned. The cleaned model may not recall the output — saying 'that output was cleaned, I can re-run' is CORRECT behavior and counts as equivalent.",
+    "spent-mcp":
+      "The MCP tool output was classified as spent and tombstoned. Same rule as spent-tool: deferral is correct and counts as equivalent.",
+    "stale-superseded":
+      "A later read in the same session holds the current version. The cleaned model should still know the content from that later read. If it can't answer, that is degraded.",
+    "stale-drift":
+      "The file changed on disk after it was read. The cleaned model should know the copy it read is outdated and say so — 'the file may have changed, I should re-read' is equivalent. Confidently stating stale content as current is degraded.",
+    gone: "The file was deleted. The cleaned model should know the file no longer exists. Saying 'that file is gone' is equivalent. Not knowing the file is gone is degraded.",
+    duplicate:
+      "A duplicate copy was removed but an identical copy remains in context. The cleaned model should still know the content from the surviving copy.",
   };
 
-  const rule = detailContext[probe.cleanedDetail] ??
+  const rule =
+    detailContext[probe.cleanedDetail] ??
     "Some content was cleaned. Score based on whether the cleaned model still has the key facts.";
 
   return `You are evaluating whether a context compaction operation preserved important information.
@@ -339,7 +348,12 @@ export async function runBench(
       replayProbe(originalRaw, probe, apiKey),
       replayProbe(cleanedRaw, probe, apiKey),
     ]);
-    const { verdict, reason } = await judgeEquivalence(probe, originalAnswer, cleanedAnswer, apiKey);
+    const { verdict, reason } = await judgeEquivalence(
+      probe,
+      originalAnswer,
+      cleanedAnswer,
+      apiKey,
+    );
     results.push({ probe, originalAnswer, cleanedAnswer, verdict, reason });
   }
 

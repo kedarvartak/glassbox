@@ -35,7 +35,6 @@ export function relativeTime(iso: string): string {
   return new Date(t).toISOString().slice(0, 10);
 }
 
-export const sourceColor = (source: string): string =>
-  `var(--src-${source}, var(--src-unknown))`;
+export const sourceColor = (source: string): string => `var(--src-${source}, var(--src-unknown))`;
 
 export const statusColor = (status: SegmentStatus): string => `var(--${status})`;

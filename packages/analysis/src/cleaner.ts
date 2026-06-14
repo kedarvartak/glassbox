@@ -1,9 +1,4 @@
-import type {
-  ContextSnapshot,
-  MessageId,
-  SegmentId,
-  ToolCallId,
-} from "@glassbox/core";
+import type { ContextSnapshot, MessageId, SegmentId, ToolCallId } from "@glassbox/core";
 import type { ReclaimableDetail, ReclaimableReport } from "./reclaimable.js";
 
 /**

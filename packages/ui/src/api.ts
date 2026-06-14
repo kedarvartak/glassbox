@@ -84,7 +84,13 @@ export interface SessionDetail {
   };
   readonly clean: {
     readonly actions: readonly {
-      readonly detail: "gone" | "stale-drift" | "stale-superseded" | "duplicate" | "spent-tool" | "spent-mcp";
+      readonly detail:
+        | "gone"
+        | "stale-drift"
+        | "stale-superseded"
+        | "duplicate"
+        | "spent-tool"
+        | "spent-mcp";
       readonly path: string | null;
       readonly reclaimableTokens: number;
       readonly tombstoneTokens: number;

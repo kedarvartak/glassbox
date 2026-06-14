@@ -138,7 +138,9 @@ export function reconstructContext(session: Session, opts: ReconstructOptions): 
  * Composition by source — the x-ray's headline breakdown. Tokens per source,
  * descending. A thin fold over a snapshot, handy for the CLI and UI.
  */
-export function composition(snapshot: ContextSnapshot): { source: SegmentSource; tokens: number }[] {
+export function composition(
+  snapshot: ContextSnapshot,
+): { source: SegmentSource; tokens: number }[] {
   const bySource = new Map<SegmentSource, number>();
   for (const s of snapshot.segments) {
     bySource.set(s.source, (bySource.get(s.source) ?? 0) + s.sizeTokens);

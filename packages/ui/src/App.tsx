@@ -30,29 +30,41 @@ export function App() {
       .then((d) => live && setDetail(d))
       .catch((e: unknown) => live && setError(String(e)))
       .finally(() => live && setLoadingDetail(false));
-    return () => { live = false; };
+    return () => {
+      live = false;
+    };
   }, [selected]);
 
   return (
     <div className="term">
-      <Hud
-        sessions={sessions}
-        selected={selected}
-        onSelect={setSelected}
-        detail={detail}
-      />
+      <Hud sessions={sessions} selected={selected} onSelect={setSelected} detail={detail} />
       {error ? (
         <div className="screen-center">
-          <div><div className="err">SIGNAL LOST</div>{error}</div>
+          <div>
+            <div className="err">SIGNAL LOST</div>
+            {error}
+          </div>
         </div>
       ) : !sessions ? (
-        <div className="screen-center"><div><div className="spin" />READING INDEX…</div></div>
+        <div className="screen-center">
+          <div>
+            <div className="spin" />
+            READING INDEX…
+          </div>
+        </div>
       ) : sessions.length === 0 ? (
         <div className="screen-center">
-          <div>NO SESSIONS INDEXED — run <span className="amber">glassbox index</span> first.</div>
+          <div>
+            NO SESSIONS INDEXED — run <span className="amber">glassbox index</span> first.
+          </div>
         </div>
       ) : loadingDetail || !detail ? (
-        <div className="screen-center"><div><div className="spin" />ANALYZING SESSION…</div></div>
+        <div className="screen-center">
+          <div>
+            <div className="spin" />
+            ANALYZING SESSION…
+          </div>
+        </div>
       ) : (
         <SessionView
           d={detail}
@@ -72,7 +84,10 @@ export function App() {
 }
 
 function Hud({
-  sessions, selected, onSelect, detail,
+  sessions,
+  selected,
+  onSelect,
+  detail,
 }: {
   sessions: SessionListItem[] | null;
   selected: string | null;
@@ -81,16 +96,30 @@ function Hud({
 }) {
   const m = detail?.meta;
   const cur = sessions?.find((s) => s.locator === selected) ?? null;
-  const model = detail?.cost.models.map((x) => x.model).join(",").split(",")[0]?.replace(/<[^>]+>/g, "") ?? "—";
+  const model =
+    detail?.cost.models
+      .map((x) => x.model)
+      .join(",")
+      .split(",")[0]
+      ?.replace(/<[^>]+>/g, "") ?? "—";
   const reclPct = detail?.reclaimable.reclaimablePct ?? 0;
 
   return (
     <header className="hud">
       <div className="hud-top">
         <div className="hud-logo">
-          <svg xmlns="http://www.w3.org/2000/svg" width="30" height="23" viewBox="0 0 50 39" fill="none">
-            <path d="M16.4992 2H37.5808L22.0816 24.9729H1L16.4992 2Z" fill="#007AFF"/>
-            <path d="M17.4231 27.1022L11.4199 36.0002H33.5015L49.0007 13.0273H32.7031L23.2071 27.1022H17.4231Z" fill="#312ECB"/>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="30"
+            height="23"
+            viewBox="0 0 50 39"
+            fill="none"
+          >
+            <path d="M16.4992 2H37.5808L22.0816 24.9729H1L16.4992 2Z" fill="#007AFF" />
+            <path
+              d="M17.4231 27.1022L11.4199 36.0002H33.5015L49.0007 13.0273H32.7031L23.2071 27.1022H17.4231Z"
+              fill="#312ECB"
+            />
           </svg>
         </div>
         <div className="hud-symwrap">
@@ -100,16 +129,36 @@ function Hud({
           )}
         </div>
         <div className="hud-meta">
-          {model !== "—" && <span><b>{model}</b></span>}
-          {m?.gitBranch && <span>BR <b>{m.gitBranch}</b></span>}
+          {model !== "—" && (
+            <span>
+              <b>{model}</b>
+            </span>
+          )}
+          {m?.gitBranch && (
+            <span>
+              BR <b>{m.gitBranch}</b>
+            </span>
+          )}
           {cur && <span>{cur.projectPath}</span>}
         </div>
-        <div className="hud-live"><span className="dot" />LIVE · LOCAL</div>
+        <div className="hud-live">
+          <span className="dot" />
+          LIVE · LOCAL
+        </div>
       </div>
 
       <div className="hud-quotes">
-        <Quote k="Cost" v={detail ? fmtUsd(detail.cost.totalUsd) : "—"} cls="amber" sub="provider actuals" />
-        <Quote k="Context" v={detail ? fmtTokens(detail.xray.totalTokens) : "—"} sub={detail ? `${detail.xray.segmentCount} segments` : ""} />
+        <Quote
+          k="Cost"
+          v={detail ? fmtUsd(detail.cost.totalUsd) : "—"}
+          cls="amber"
+          sub="provider actuals"
+        />
+        <Quote
+          k="Context"
+          v={detail ? fmtTokens(detail.xray.totalTokens) : "—"}
+          sub={detail ? `${detail.xray.segmentCount} segments` : ""}
+        />
         <Quote
           k="Reclaim"
           v={detail ? fmtPct(reclPct) : "—"}
@@ -118,13 +167,32 @@ function Hud({
         />
         <Quote
           k="Waste/Turn"
-          v={detail?.reclaimable.wastedUsdPerTurn != null ? fmtUsd(detail.reclaimable.wastedUsdPerTurn) : "—"}
+          v={
+            detail?.reclaimable.wastedUsdPerTurn != null
+              ? fmtUsd(detail.reclaimable.wastedUsdPerTurn)
+              : "—"
+          }
           cls="red"
           sub="recarried/turn"
         />
-        <Quote k="Turns" v={m ? fmtInt(m.turnCount) : "—"} sub={m ? `${m.messageCount} msgs` : ""} />
-        <Quote k="Tools" v={m ? fmtInt(m.toolCallCount) : "—"} sub={m ? `${m.fileOpCount} file ops` : ""} />
-        <Quote k="Evict" v={detail ? fmtInt(detail.clean?.summary.copies ?? 0) : "—"} cls="amber" sub={detail ? `${fmtTokens(detail.clean?.summary.netReclaimedTokens ?? 0)} net` : "lossless"} />
+        <Quote
+          k="Turns"
+          v={m ? fmtInt(m.turnCount) : "—"}
+          sub={m ? `${m.messageCount} msgs` : ""}
+        />
+        <Quote
+          k="Tools"
+          v={m ? fmtInt(m.toolCallCount) : "—"}
+          sub={m ? `${m.fileOpCount} file ops` : ""}
+        />
+        <Quote
+          k="Evict"
+          v={detail ? fmtInt(detail.clean?.summary.copies ?? 0) : "—"}
+          cls="amber"
+          sub={
+            detail ? `${fmtTokens(detail.clean?.summary.netReclaimedTokens ?? 0)} net` : "lossless"
+          }
+        />
       </div>
     </header>
   );
@@ -151,7 +219,9 @@ function SessionMenu({
     return () => document.removeEventListener("mousedown", closeOnOutside);
   }, []);
 
-  const currentName = current ? (basename(current.projectPath) || current.sessionId.slice(0, 8)).toUpperCase() : "NO SESSION";
+  const currentName = current
+    ? (basename(current.projectPath) || current.sessionId.slice(0, 8)).toUpperCase()
+    : "NO SESSION";
 
   return (
     <div className="session-menu" ref={ref}>
@@ -164,7 +234,9 @@ function SessionMenu({
       >
         <span className="session-trigger-main">{currentName}</span>
         {current && (
-          <span className="session-trigger-meta">{relativeTime(current.endedAt)} · {current.messageCount}MSG</span>
+          <span className="session-trigger-meta">
+            {relativeTime(current.endedAt)} · {current.messageCount}MSG
+          </span>
         )}
         <span className="session-caret" aria-hidden="true" />
       </button>
@@ -173,7 +245,9 @@ function SessionMenu({
         <div className="session-popover" role="listbox">
           {sessions.map((session) => {
             const active = session.locator === selected;
-            const name = (basename(session.projectPath) || session.sessionId.slice(0, 8)).toUpperCase();
+            const name = (
+              basename(session.projectPath) || session.sessionId.slice(0, 8)
+            ).toUpperCase();
             return (
               <button
                 className={`session-option${active ? " active" : ""}`}
@@ -188,7 +262,8 @@ function SessionMenu({
               >
                 <span className="session-option-name">{name}</span>
                 <span className="session-option-meta">
-                  {relativeTime(session.endedAt)} · {session.messageCount}MSG · {session.toolCallCount}TOOLS
+                  {relativeTime(session.endedAt)} · {session.messageCount}MSG ·{" "}
+                  {session.toolCallCount}TOOLS
                 </span>
                 <span className="session-option-path">{session.projectPath}</span>
               </button>

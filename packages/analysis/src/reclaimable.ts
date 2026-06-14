@@ -135,9 +135,9 @@ const ONE_SHOT_TOOLS = new Set([
   "WebFetch",
   "WebSearch",
   "NotebookRead",
-  "TodoRead",   // reads the current todo list — ephemeral state snapshot
-  "TodoWrite",  // confirmation text is never referenced again
-  "Task",       // subagent spawn — result is the output, used once
+  "TodoRead", // reads the current todo list — ephemeral state snapshot
+  "TodoWrite", // confirmation text is never referenced again
+  "Task", // subagent spawn — result is the output, used once
 ]);
 
 /**
@@ -156,7 +156,8 @@ async function classifySessionSegments(
   // Fingerprint each segment via its origin tool call (file content wins over
   // result text when both exist — same bytes anyway). Names drive `spent`.
   const hashByCall = new Map<ToolCallId, string>();
-  for (const op of session.fileOps) if (op.contentHash) hashByCall.set(op.toolCallId, op.contentHash);
+  for (const op of session.fileOps)
+    if (op.contentHash) hashByCall.set(op.toolCallId, op.contentHash);
   for (const tc of session.toolCalls) {
     if (tc.contentHash && !hashByCall.has(tc.id)) hashByCall.set(tc.id, tc.contentHash);
   }
@@ -186,7 +187,11 @@ async function classifySessionSegments(
   const verdicts = new Map<SegmentId, Verdict>();
   for (const seg of snapshot.segments) {
     if (duplicate.has(seg.id)) {
-      verdicts.set(seg.id, { status: "duplicate", detail: "duplicate", reason: "byte-identical to a later copy still resident in the window" });
+      verdicts.set(seg.id, {
+        status: "duplicate",
+        detail: "duplicate",
+        reason: "byte-identical to a later copy still resident in the window",
+      });
       continue;
     }
     const stale = superseded.get(seg.id);
@@ -200,13 +205,21 @@ async function classifySessionSegments(
       // Single modifiedAt call answers both existence (null = gone) and drift.
       const modTs = await repo.modifiedAt(seg.path);
       if (modTs === null) {
-        verdicts.set(seg.id, { status: "gone", detail: "gone", reason: `file no longer exists: ${seg.path}` });
+        verdicts.set(seg.id, {
+          status: "gone",
+          detail: "gone",
+          reason: `file no longer exists: ${seg.path}`,
+        });
       } else {
         const originMsg = msgById.get(seg.originMessageId);
         const capturedMs = originMsg ? new Date(originMsg.timestamp).getTime() : null;
         // 3 s grace prevents false positives when mtime ≈ write/edit timestamp.
         if (capturedMs !== null && modTs > capturedMs + 3_000) {
-          verdicts.set(seg.id, { status: "stale", detail: "stale-drift", reason: `file was modified on disk after this copy was captured` });
+          verdicts.set(seg.id, {
+            status: "stale",
+            detail: "stale-drift",
+            reason: `file was modified on disk after this copy was captured`,
+          });
         } else {
           verdicts.set(seg.id, { status: "live", reason: "no reclaimable signal" });
         }
@@ -215,8 +228,13 @@ async function classifySessionSegments(
     }
     // MCP tool results are also one-shot by nature (envelope + ephemeral data).
     const isMcp = seg.source === "mcp";
-    if ((seg.source === "tool_result" || isMcp) && lastTurn && !lastTurnIds.has(seg.originMessageId)) {
-      const name = seg.originToolCallId === undefined ? undefined : nameByCall.get(seg.originToolCallId);
+    if (
+      (seg.source === "tool_result" || isMcp) &&
+      lastTurn &&
+      !lastTurnIds.has(seg.originMessageId)
+    ) {
+      const name =
+        seg.originToolCallId === undefined ? undefined : nameByCall.get(seg.originToolCallId);
       if (isMcp || (name && ONE_SHOT_TOOLS.has(name))) {
         verdicts.set(seg.id, {
           status: "spent",
@@ -255,7 +273,10 @@ export async function classifySegment(segment: Segment, repo: RepoState): Promis
  * Provable purely from the model: we order each path's accesses by the adapter's
  * (chronological) `fileOps` order and mark everything but the latest stale.
  */
-function supersededFileSegments(session: Session, snapshot: ContextSnapshot): Map<SegmentId, string> {
+function supersededFileSegments(
+  session: Session,
+  snapshot: ContextSnapshot,
+): Map<SegmentId, string> {
   const opOrder = new Map<ToolCallId, number>();
   session.fileOps.forEach((op, i) => opOrder.set(op.toolCallId, i));
 

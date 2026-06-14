@@ -4,7 +4,16 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createInterface } from "node:readline/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
-import { ClaudeCodeAdapter, claudeProjectsRoot, forkTranscript, applyTrimTranscript, extractColdText, composeCompactedTranscript, validateTranscript, newProblems } from "@glassbox/adapter-claude-code";
+import {
+  ClaudeCodeAdapter,
+  claudeProjectsRoot,
+  forkTranscript,
+  applyTrimTranscript,
+  extractColdText,
+  composeCompactedTranscript,
+  validateTranscript,
+  newProblems,
+} from "@glassbox/adapter-claude-code";
 import {
   analyzeSessionCost,
   analyzeSessionReclaimable,
@@ -39,9 +48,24 @@ import { SessionIndex, SessionIndexer } from "@glassbox/store";
 import { startServer, uiIsBuilt } from "./server.js";
 import { EstimateTokenCounter } from "./token-counter.js";
 import {
-  bold, dim, gray, green, yellow, red, nl, hr,
-  fmtUsd, fmtTok, fmtPct, fmtInt,
-  renderHeader, renderStats, renderXray, renderCost, renderReclaimable, renderSessions,
+  bold,
+  dim,
+  gray,
+  green,
+  yellow,
+  red,
+  nl,
+  hr,
+  fmtUsd,
+  fmtTok,
+  fmtPct,
+  fmtInt,
+  renderHeader,
+  renderStats,
+  renderXray,
+  renderCost,
+  renderReclaimable,
+  renderSessions,
   renderEvictionPlan,
 } from "./render.js";
 
@@ -75,7 +99,7 @@ async function main(argv: string[]): Promise<number> {
     }
 
     case "parse": {
-      const locator = rest[0] ?? await pickSession(adapter);
+      const locator = rest[0] ?? (await pickSession(adapter));
       if (!locator) {
         console.error("usage: glassbox parse <session.jsonl>");
         return 2;
@@ -86,7 +110,7 @@ async function main(argv: string[]): Promise<number> {
     }
 
     case "cost": {
-      const locator = rest[0] ?? await pickSession(adapter);
+      const locator = rest[0] ?? (await pickSession(adapter));
       if (!locator) {
         console.error("usage: glassbox cost <session.jsonl>");
         return 2;
@@ -95,19 +119,22 @@ async function main(argv: string[]): Promise<number> {
       const cost = analyzeSessionCost(session);
       const model = session.messages.find((m) => m.model)?.model ?? "—";
 
-      renderHeader({
-        sessionId: session.id,
-        projectPath: session.projectPath,
-        gitBranch: session.gitBranch,
-        toolVersion: session.toolVersion,
-        startedAt: session.startedAt,
-        endedAt: session.endedAt,
-        messageCount: session.messages.length,
-        turnCount: session.turns.length,
-        toolCallCount: session.toolCalls.length,
-        fileOpCount: session.fileOps.length,
-        memoryOpCount: session.memoryOps.length,
-      }, model);
+      renderHeader(
+        {
+          sessionId: session.id,
+          projectPath: session.projectPath,
+          gitBranch: session.gitBranch,
+          toolVersion: session.toolVersion,
+          startedAt: session.startedAt,
+          endedAt: session.endedAt,
+          messageCount: session.messages.length,
+          turnCount: session.turns.length,
+          toolCallCount: session.toolCalls.length,
+          fileOpCount: session.fileOps.length,
+          memoryOpCount: session.memoryOps.length,
+        },
+        model,
+      );
 
       renderCost({
         totalUsd: cost.totalUsd,
@@ -122,7 +149,7 @@ async function main(argv: string[]): Promise<number> {
     }
 
     case "xray": {
-      const locator = rest[0] ?? await pickSession(adapter);
+      const locator = rest[0] ?? (await pickSession(adapter));
       if (!locator) {
         console.error("usage: glassbox xray <session.jsonl>");
         return 2;
@@ -136,33 +163,39 @@ async function main(argv: string[]): Promise<number> {
         ...(pricing ? { pricing } : {}),
       });
 
-      renderHeader({
-        sessionId: session.id,
-        projectPath: session.projectPath,
-        gitBranch: session.gitBranch,
-        toolVersion: session.toolVersion,
-        startedAt: session.startedAt,
-        endedAt: session.endedAt,
-        messageCount: session.messages.length,
-        turnCount: session.turns.length,
-        toolCallCount: session.toolCalls.length,
-        fileOpCount: session.fileOps.length,
-        memoryOpCount: session.memoryOps.length,
-      }, model);
+      renderHeader(
+        {
+          sessionId: session.id,
+          projectPath: session.projectPath,
+          gitBranch: session.gitBranch,
+          toolVersion: session.toolVersion,
+          startedAt: session.startedAt,
+          endedAt: session.endedAt,
+          messageCount: session.messages.length,
+          turnCount: session.turns.length,
+          toolCallCount: session.toolCalls.length,
+          fileOpCount: session.fileOps.length,
+          memoryOpCount: session.memoryOps.length,
+        },
+        model,
+      );
 
       renderXray(composition(snapshot), snapshot.totalTokens);
-      renderReclaimable({
-        reclaimableTokens: report.reclaimableTokens,
-        reclaimablePct: report.reclaimablePct,
-        wastedUsdPerTurn: report.wastedUsdPerTurn,
-        byStatus: report.byStatus as Record<string, number>,
-        items: report.items.slice(0, 12),
-      }, snapshot.totalTokens);
+      renderReclaimable(
+        {
+          reclaimableTokens: report.reclaimableTokens,
+          reclaimablePct: report.reclaimablePct,
+          wastedUsdPerTurn: report.wastedUsdPerTurn,
+          byStatus: report.byStatus as Record<string, number>,
+          items: report.items.slice(0, 12),
+        },
+        snapshot.totalTokens,
+      );
       return 0;
     }
 
     case "inspect": {
-      const locator = rest[0] ?? await pickSession(adapter);
+      const locator = rest[0] ?? (await pickSession(adapter));
       if (!locator) {
         console.error("usage: glassbox inspect <session.jsonl>");
         return 2;
@@ -177,25 +210,40 @@ async function main(argv: string[]): Promise<number> {
         ...(pricing ? { pricing } : {}),
       });
 
-      renderHeader({
-        sessionId: session.id,
-        projectPath: session.projectPath,
-        gitBranch: session.gitBranch,
-        toolVersion: session.toolVersion,
-        startedAt: session.startedAt,
-        endedAt: session.endedAt,
-        messageCount: session.messages.length,
-        turnCount: session.turns.length,
-        toolCallCount: session.toolCalls.length,
-        fileOpCount: session.fileOps.length,
-        memoryOpCount: session.memoryOps.length,
-      }, model);
+      renderHeader(
+        {
+          sessionId: session.id,
+          projectPath: session.projectPath,
+          gitBranch: session.gitBranch,
+          toolVersion: session.toolVersion,
+          startedAt: session.startedAt,
+          endedAt: session.endedAt,
+          messageCount: session.messages.length,
+          turnCount: session.turns.length,
+          toolCallCount: session.toolCalls.length,
+          fileOpCount: session.fileOps.length,
+          memoryOpCount: session.memoryOps.length,
+        },
+        model,
+      );
 
       renderStats([
-        { label: "session cost",    value: fmtUsd(cost.totalUsd),                           sub: "actuals · exact" },
-        { label: "context window",  value: fmtTok(snapshot.totalTokens) + " tok",            sub: `${snapshot.segments.length} segments` },
-        { label: "reclaimable",     value: fmtPct(report.reclaimablePct),                    sub: `${fmtInt(report.reclaimableTokens)} tokens` },
-        { label: "wasted / turn",   value: report.wastedUsdPerTurn !== null ? fmtUsd(report.wastedUsdPerTurn) : "—", sub: `${session.turns.length} turns` },
+        { label: "session cost", value: fmtUsd(cost.totalUsd), sub: "actuals · exact" },
+        {
+          label: "context window",
+          value: fmtTok(snapshot.totalTokens) + " tok",
+          sub: `${snapshot.segments.length} segments`,
+        },
+        {
+          label: "reclaimable",
+          value: fmtPct(report.reclaimablePct),
+          sub: `${fmtInt(report.reclaimableTokens)} tokens`,
+        },
+        {
+          label: "wasted / turn",
+          value: report.wastedUsdPerTurn !== null ? fmtUsd(report.wastedUsdPerTurn) : "—",
+          sub: `${session.turns.length} turns`,
+        },
       ]);
 
       renderXray(composition(snapshot), snapshot.totalTokens);
@@ -208,18 +256,21 @@ async function main(argv: string[]): Promise<number> {
         cacheSavingsUsd: cost.cacheSavingsUsd,
         unpricedMessages: cost.unpricedMessages,
       });
-      renderReclaimable({
-        reclaimableTokens: report.reclaimableTokens,
-        reclaimablePct: report.reclaimablePct,
-        wastedUsdPerTurn: report.wastedUsdPerTurn,
-        byStatus: report.byStatus as Record<string, number>,
-        items: report.items.slice(0, 12),
-      }, snapshot.totalTokens);
+      renderReclaimable(
+        {
+          reclaimableTokens: report.reclaimableTokens,
+          reclaimablePct: report.reclaimablePct,
+          wastedUsdPerTurn: report.wastedUsdPerTurn,
+          byStatus: report.byStatus as Record<string, number>,
+          items: report.items.slice(0, 12),
+        },
+        snapshot.totalTokens,
+      );
       return 0;
     }
 
     case "clean": {
-      const locator = rest[0] ?? await pickSession(adapter);
+      const locator = rest[0] ?? (await pickSession(adapter));
       if (!locator) {
         console.error("usage: glassbox clean <session.jsonl> [--fork] [--yes] [--json]");
         return 2;
@@ -242,19 +293,22 @@ async function main(argv: string[]): Promise<number> {
       const doFork = rest.includes("--fork");
       const assumeYes = rest.includes("--yes") || rest.includes("-y");
 
-      renderHeader({
-        sessionId: session.id,
-        projectPath: session.projectPath,
-        gitBranch: session.gitBranch,
-        toolVersion: session.toolVersion,
-        startedAt: session.startedAt,
-        endedAt: session.endedAt,
-        messageCount: session.messages.length,
-        turnCount: session.turns.length,
-        toolCallCount: session.toolCalls.length,
-        fileOpCount: session.fileOps.length,
-        memoryOpCount: session.memoryOps.length,
-      }, model);
+      renderHeader(
+        {
+          sessionId: session.id,
+          projectPath: session.projectPath,
+          gitBranch: session.gitBranch,
+          toolVersion: session.toolVersion,
+          startedAt: session.startedAt,
+          endedAt: session.endedAt,
+          messageCount: session.messages.length,
+          turnCount: session.turns.length,
+          toolCallCount: session.toolCalls.length,
+          fileOpCount: session.fileOps.length,
+          memoryOpCount: session.memoryOps.length,
+        },
+        model,
+      );
 
       renderEvictionPlan(eviction, { dryRun: !doFork });
 
@@ -290,11 +344,17 @@ async function main(argv: string[]): Promise<number> {
         console.log(`  ${bold("Source:")} ${dim(locator)}  ${dim("(untouched)")}`);
         console.log(`  ${bold("New session:")} ${green(newSessionId)}`);
         console.log(`  ${bold("Output:")} ${outPath}`);
-        console.log(`  tombstoned ${green(String(summary.evicted))} superseded ` +
-          `cop${summary.evicted === 1 ? "y" : "ies"}; ` +
-          `${fmtInt(eviction.netReclaimedTokens)} tokens net reclaimed`);
+        console.log(
+          `  tombstoned ${green(String(summary.evicted))} superseded ` +
+            `cop${summary.evicted === 1 ? "y" : "ies"}; ` +
+            `${fmtInt(eviction.netReclaimedTokens)} tokens net reclaimed`,
+        );
         if (summary.notFound.length > 0) {
-          console.log(gray(`  (${summary.notFound.length} planned eviction(s) had no locatable bytes — skipped)`));
+          console.log(
+            gray(
+              `  (${summary.notFound.length} planned eviction(s) had no locatable bytes — skipped)`,
+            ),
+          );
         }
         nl();
 
@@ -303,20 +363,38 @@ async function main(argv: string[]): Promise<number> {
         const before = validateTranscript(raw);
         const after = validateTranscript(text);
         const introduced = newProblems(before, after);
-        console.log(`  ${bold("Integrity:")} ${after.toolUses} tool_use / ${after.toolResults} tool_result · ${after.messages} messages`);
+        console.log(
+          `  ${bold("Integrity:")} ${after.toolUses} tool_use / ${after.toolResults} tool_result · ${after.messages} messages`,
+        );
         if (introduced.length > 0) {
-          console.log(red(`  ✗ fork would introduce ${introduced.length} structural problem(s) — refusing to write:`));
+          console.log(
+            red(
+              `  ✗ fork would introduce ${introduced.length} structural problem(s) — refusing to write:`,
+            ),
+          );
           for (const p of introduced.slice(0, 8)) console.log(red(`      ${p.code}  ${p.detail}`));
-          console.log(gray(`  your original is untouched. This is a bug in the fork-writer; please report it.`));
+          console.log(
+            gray(
+              `  your original is untouched. This is a bug in the fork-writer; please report it.`,
+            ),
+          );
           return 1;
         }
-        console.log(green(`  ✓ no new structural problems vs the original (pairing, threading, content all intact)`));
+        console.log(
+          green(
+            `  ✓ no new structural problems vs the original (pairing, threading, content all intact)`,
+          ),
+        );
         if (before.problems.length > 0) {
-          console.log(gray(`  (the original already has ${before.problems.length} pre-existing oddit(ies); carried over unchanged)`));
+          console.log(
+            gray(
+              `  (the original already has ${before.problems.length} pre-existing oddit(ies); carried over unchanged)`,
+            ),
+          );
         }
         nl();
 
-        const ok = assumeYes || await confirm(`  Write cleaned fork to ${outPath}?`);
+        const ok = assumeYes || (await confirm(`  Write cleaned fork to ${outPath}?`));
         if (!ok) {
           console.log(gray("  aborted — no file written."));
           return 0;
@@ -335,24 +413,34 @@ async function main(argv: string[]): Promise<number> {
           });
           const beforeTok = snapshot.totalTokens;
           const nowTok = reAnalyzed.snapshot.totalTokens;
-          console.log(green(`  ✓ fork re-parses cleanly (${cleaned.messages.length} messages intact)`));
-          console.log(`  context tokens  ${fmtTok(beforeTok)} → ${fmtTok(nowTok)}  ` +
-            `(${fmtPct((beforeTok - nowTok) / (beforeTok || 1))} lighter)`);
+          console.log(
+            green(`  ✓ fork re-parses cleanly (${cleaned.messages.length} messages intact)`),
+          );
+          console.log(
+            `  context tokens  ${fmtTok(beforeTok)} → ${fmtTok(nowTok)}  ` +
+              `(${fmtPct((beforeTok - nowTok) / (beforeTok || 1))} lighter)`,
+          );
         } catch (e) {
-          console.log(red(`  ! fork failed to re-parse: ${e instanceof Error ? e.message : String(e)}`));
+          console.log(
+            red(`  ! fork failed to re-parse: ${e instanceof Error ? e.message : String(e)}`),
+          );
           console.log(red(`    the original is untouched; do not resume from the fork.`));
           return 1;
         }
         nl();
-        console.log(`  ${bold("To try it:")} from this project's directory, run ${green("claude --resume")}`);
-        console.log(`  and pick the newest session (${dim(newSessionId.slice(0, 8))}…). Your original is still there.`);
+        console.log(
+          `  ${bold("To try it:")} from this project's directory, run ${green("claude --resume")}`,
+        );
+        console.log(
+          `  and pick the newest session (${dim(newSessionId.slice(0, 8))}…). Your original is still there.`,
+        );
         nl();
       }
       return 0;
     }
 
     case "compact": {
-      const locator = rest[0] ?? await pickSession(adapter);
+      const locator = rest[0] ?? (await pickSession(adapter));
       if (!locator) {
         console.error("usage: glassbox compact <session.jsonl> [--fork] [--yes]");
         return 2;
@@ -369,19 +457,22 @@ async function main(argv: string[]): Promise<number> {
       const doFork = rest.includes("--fork");
       const assumeYes = rest.includes("--yes") || rest.includes("-y");
 
-      renderHeader({
-        sessionId: session.id,
-        projectPath: session.projectPath,
-        gitBranch: session.gitBranch,
-        toolVersion: session.toolVersion,
-        startedAt: session.startedAt,
-        endedAt: session.endedAt,
-        messageCount: session.messages.length,
-        turnCount: session.turns.length,
-        toolCallCount: session.toolCalls.length,
-        fileOpCount: session.fileOps.length,
-        memoryOpCount: session.memoryOps.length,
-      }, model);
+      renderHeader(
+        {
+          sessionId: session.id,
+          projectPath: session.projectPath,
+          gitBranch: session.gitBranch,
+          toolVersion: session.toolVersion,
+          startedAt: session.startedAt,
+          endedAt: session.endedAt,
+          messageCount: session.messages.length,
+          turnCount: session.turns.length,
+          toolCallCount: session.toolCalls.length,
+          fileOpCount: session.fileOps.length,
+          memoryOpCount: session.memoryOps.length,
+        },
+        model,
+      );
 
       // Tier 0: provable garbage (lossless)
       const tier0 = planEviction(report, snapshot, { classes: PROVABLE_CLASSES });
@@ -402,11 +493,15 @@ async function main(argv: string[]): Promise<number> {
       if (spentActions.length === 0) {
         console.log(gray("  no spent tool outputs outside the working set."));
       } else {
-        console.log(`  ${dim("tool call stays intact; only the heavy result bytes are cleared — no model call, no risk")}`);
+        console.log(
+          `  ${dim("tool call stays intact; only the heavy result bytes are cleared — no model call, no risk")}`,
+        );
         nl();
         for (const a of spentActions.slice(0, 14)) {
           const tok = bold(fmtTok(a.reclaimableTokens)).padStart(7);
-          console.log(`  ${yellow("SPENT")}  ${tok}  ${gray(a.detail === "spent-mcp" ? "mcp output" : (a.path ?? "tool output"))}`);
+          console.log(
+            `  ${yellow("SPENT")}  ${tok}  ${gray(a.detail === "spent-mcp" ? "mcp output" : (a.path ?? "tool output"))}`,
+          );
         }
         if (spentActions.length > 14) console.log(dim(`  … and ${spentActions.length - 14} more`));
         nl();
@@ -414,8 +509,8 @@ async function main(argv: string[]): Promise<number> {
         const spentTombstones = spentActions.reduce((s, a) => s + a.tombstoneTokens, 0);
         console.log(
           `  ${dim("tier 1:")} ${bold(String(spentActions.length))} spent outputs` +
-          `  ${dim("·")}  ${bold(fmtTok(spentTokens))} tok cleared` +
-          `  ${dim("·")}  ${green(fmtTok(spentTokens - spentTombstones) + " net")}`,
+            `  ${dim("·")}  ${bold(fmtTok(spentTokens))} tok cleared` +
+            `  ${dim("·")}  ${green(fmtTok(spentTokens - spentTombstones) + " net")}`,
         );
       }
 
@@ -426,18 +521,21 @@ async function main(argv: string[]): Promise<number> {
       if (trimPlan.actions.length === 0) {
         console.log(gray("  no cold live bulk segments above the size floor."));
       } else {
-        console.log(`  ${dim("cold live segments trimmed to skeleton: head + tail + artifact lines — no model, no fabrication risk")}`);
+        console.log(
+          `  ${dim("cold live segments trimmed to skeleton: head + tail + artifact lines — no model, no fabrication risk")}`,
+        );
         nl();
         for (const a of trimPlan.actions.slice(0, 14)) {
           const tok = bold(fmtTok(a.currentTokens)).padStart(7);
           console.log(`  ${yellow("TRIM")}   ${tok}  ${gray(a.label)}`);
         }
-        if (trimPlan.actions.length > 14) console.log(dim(`  … and ${trimPlan.actions.length - 14} more`));
+        if (trimPlan.actions.length > 14)
+          console.log(dim(`  … and ${trimPlan.actions.length - 14} more`));
         nl();
         console.log(
           `  ${dim("tier 2:")} ${bold(String(trimPlan.actions.length))} segments` +
-          `  ${dim("·")}  ${bold(fmtTok(trimPlan.trimCandidateTokens))} tok in candidates` +
-          `  ${dim("·")}  ${green("actual savings at write time")}`,
+            `  ${dim("·")}  ${bold(fmtTok(trimPlan.trimCandidateTokens))} tok in candidates` +
+            `  ${dim("·")}  ${green("actual savings at write time")}`,
         );
       }
 
@@ -447,21 +545,31 @@ async function main(argv: string[]): Promise<number> {
       hr("TIER 3 — GUIDED SUMMARIZATION");
       nl();
       if (!summarizePlan || !summarizePlan.hasContent) {
-        console.log(gray("  no cold reasoning prose above the threshold (session too short, or reasoning already cold-cleared)."));
+        console.log(
+          gray(
+            "  no cold reasoning prose above the threshold (session too short, or reasoning already cold-cleared).",
+          ),
+        );
       } else {
         const hasApiKey = !!process.env["ANTHROPIC_API_KEY"];
         console.log(
           `  ${dim("cold reasoning from turns 0–")}${bold(String(summarizePlan.boundaryTurnIndex - 1))}` +
-          `  ${dim("·")}  ${bold(fmtTok(summarizePlan.coldReasoningTokens))} tok` +
-          `  ${dim("·")}  ${bold(String(summarizePlan.coldMessageIds.size))} messages in cold prefix`,
+            `  ${dim("·")}  ${bold(fmtTok(summarizePlan.coldReasoningTokens))} tok` +
+            `  ${dim("·")}  ${bold(String(summarizePlan.coldMessageIds.size))} messages in cold prefix`,
         );
         console.log(
           `  working set: ${dim("turns ")}${bold(String(summarizePlan.boundaryTurnIndex))}${dim("–end preserved verbatim")}`,
         );
         if (!hasApiKey) {
-          console.log(yellow(`  ⚠  ANTHROPIC_API_KEY not set — Tier 3 will be skipped at write time`));
+          console.log(
+            yellow(`  ⚠  ANTHROPIC_API_KEY not set — Tier 3 will be skipped at write time`),
+          );
         } else {
-          console.log(dim(`  will call ${SUMMARIZE_MODEL_DISPLAY} to compress cold reasoning → structured digest`));
+          console.log(
+            dim(
+              `  will call ${SUMMARIZE_MODEL_DISPLAY} to compress cold reasoning → structured digest`,
+            ),
+          );
         }
       }
       nl();
@@ -471,13 +579,15 @@ async function main(argv: string[]): Promise<number> {
       nl();
       console.log(
         `  ${dim("tier 0:")}  ${bold(fmtTok(tier0.netReclaimedTokens))} tok` +
-        `  ${dim("  tier 1:")}  ${bold(fmtTok(tier1.netReclaimedTokens - tier0.netReclaimedTokens))} tok` +
-        `  ${dim("  tier 2:")}  ${bold(fmtTok(trimPlan.trimCandidateTokens))} tok in` +
-        (summarizePlan?.hasContent ? `  ${dim("  tier 3:")}  ${bold(fmtTok(summarizePlan.coldReasoningTokens))} tok in` : ""),
+          `  ${dim("  tier 1:")}  ${bold(fmtTok(tier1.netReclaimedTokens - tier0.netReclaimedTokens))} tok` +
+          `  ${dim("  tier 2:")}  ${bold(fmtTok(trimPlan.trimCandidateTokens))} tok in` +
+          (summarizePlan?.hasContent
+            ? `  ${dim("  tier 3:")}  ${bold(fmtTok(summarizePlan.coldReasoningTokens))} tok in`
+            : ""),
       );
       console.log(
         `  ${bold("eviction net:")}  ${green(fmtTok(tier1.netReclaimedTokens))} tok` +
-        `  ${dim("(")}${fmtPct(tier1.netReclaimedTokens / (snapshot.totalTokens || 1))} of window${dim(")")}`,
+          `  ${dim("(")}${fmtPct(tier1.netReclaimedTokens / (snapshot.totalTokens || 1))} of window${dim(")")}`,
       );
       nl();
 
@@ -487,7 +597,11 @@ async function main(argv: string[]): Promise<number> {
         return 0;
       }
 
-      if (tier1.actions.length === 0 && trimPlan.actions.length === 0 && (!summarizePlan || !summarizePlan.hasContent)) {
+      if (
+        tier1.actions.length === 0 &&
+        trimPlan.actions.length === 0 &&
+        (!summarizePlan || !summarizePlan.hasContent)
+      ) {
         console.log(gray("  nothing to compact."));
         nl();
         return 0;
@@ -505,8 +619,13 @@ async function main(argv: string[]): Promise<number> {
       for (const a of tier1.actions) {
         if (a.originToolCallId) evictions.set(a.originToolCallId, a.tombstone);
       }
-      const { text: afterTier1, summary: evictSummary } = forkTranscript(raw, evictions, { newSessionId });
-      const { text: afterTier2, summary: trimSummary } = applyTrimTranscript(afterTier1, trimPlan.actions);
+      const { text: afterTier1, summary: evictSummary } = forkTranscript(raw, evictions, {
+        newSessionId,
+      });
+      const { text: afterTier2, summary: trimSummary } = applyTrimTranscript(
+        afterTier1,
+        trimPlan.actions,
+      );
 
       // Apply Tier 3: summarize cold reasoning, compose synthetic preamble.
       let finalText = afterTier2;
@@ -517,7 +636,11 @@ async function main(argv: string[]): Promise<number> {
         try {
           const coldText = extractColdText(raw, summarizePlan.coldMessageIds);
           const ledger = buildArtifactLedger(session, summarizePlan.coldMessageIds);
-          console.log(dim(`  calling ${SUMMARIZE_MODEL_DISPLAY} to compress ${fmtTok(summarizePlan.coldReasoningTokens)} tok…`));
+          console.log(
+            dim(
+              `  calling ${SUMMARIZE_MODEL_DISPLAY} to compress ${fmtTok(summarizePlan.coldReasoningTokens)} tok…`,
+            ),
+          );
           const digest = await callSummarizer(coldText, ledger);
           const preambleContent = buildPreambleContent(session.id, ledger, digest);
           const { text: compacted, droppedLines } = composeCompactedTranscript(
@@ -528,10 +651,16 @@ async function main(argv: string[]): Promise<number> {
           );
           finalText = compacted;
           tier3Applied = true;
-          console.log(green(`  ✓ summarized — dropped ${droppedLines} cold lines, synthetic preamble inserted`));
+          console.log(
+            green(
+              `  ✓ summarized — dropped ${droppedLines} cold lines, synthetic preamble inserted`,
+            ),
+          );
         } catch (e) {
           if (e instanceof SummarizerError) {
-            console.log(yellow(`  ⚠ summarizer failed: ${e.message} — writing Tier 0–2 result only`));
+            console.log(
+              yellow(`  ⚠ summarizer failed: ${e.message} — writing Tier 0–2 result only`),
+            );
           } else {
             throw e;
           }
@@ -545,24 +674,34 @@ async function main(argv: string[]): Promise<number> {
       console.log(`  ${bold("Output:")} ${outPath}`);
       console.log(
         `  tombstoned ${green(String(evictSummary.evicted))} segment(s)` +
-        `  ·  trimmed ${green(String(trimSummary.trimmed))} block(s)` +
-        `  ·  ${green(String(trimSummary.linesRemoved))} lines removed` +
-        (tier3Applied ? `  ·  ${green("cold prefix summarized")}` : ""),
+          `  ·  trimmed ${green(String(trimSummary.trimmed))} block(s)` +
+          `  ·  ${green(String(trimSummary.linesRemoved))} lines removed` +
+          (tier3Applied ? `  ·  ${green("cold prefix summarized")}` : ""),
       );
       if (evictSummary.notFound.length > 0) {
-        console.log(gray(`  (${evictSummary.notFound.length} eviction(s) had no locatable bytes — skipped)`));
+        console.log(
+          gray(`  (${evictSummary.notFound.length} eviction(s) had no locatable bytes — skipped)`),
+        );
       }
       if (trimSummary.notFound.length > 0) {
-        console.log(gray(`  (${trimSummary.notFound.length} trim(s) had no locatable content — skipped)`));
+        console.log(
+          gray(`  (${trimSummary.notFound.length} trim(s) had no locatable content — skipped)`),
+        );
       }
       nl();
 
       const before = validateTranscript(raw);
       const after = validateTranscript(finalText);
       const introduced = newProblems(before, after);
-      console.log(`  ${bold("Integrity:")} ${after.toolUses} tool_use / ${after.toolResults} tool_result · ${after.messages} messages`);
+      console.log(
+        `  ${bold("Integrity:")} ${after.toolUses} tool_use / ${after.toolResults} tool_result · ${after.messages} messages`,
+      );
       if (introduced.length > 0) {
-        console.log(red(`  ✗ compaction would introduce ${introduced.length} structural problem(s) — refusing to write:`));
+        console.log(
+          red(
+            `  ✗ compaction would introduce ${introduced.length} structural problem(s) — refusing to write:`,
+          ),
+        );
         for (const p of introduced.slice(0, 8)) console.log(red(`      ${p.code}  ${p.detail}`));
         console.log(gray(`  your original is untouched.`));
         return 1;
@@ -570,7 +709,7 @@ async function main(argv: string[]): Promise<number> {
       console.log(green(`  ✓ no new structural problems (tool pairing intact)`));
       nl();
 
-      const ok = assumeYes || await confirm(`  Write compacted session to ${outPath}?`);
+      const ok = assumeYes || (await confirm(`  Write compacted session to ${outPath}?`));
       if (!ok) {
         console.log(gray("  aborted — no file written."));
         return 0;
@@ -587,22 +726,38 @@ async function main(argv: string[]): Promise<number> {
         });
         const beforeTok = snapshot.totalTokens;
         const nowTok = reAnalyzed.snapshot.totalTokens;
-        console.log(green(`  ✓ compacted session re-parses cleanly (${compacted.messages.length} messages intact)`));
-        console.log(`  context tokens  ${fmtTok(beforeTok)} → ${fmtTok(nowTok)}  (${fmtPct((beforeTok - nowTok) / (beforeTok || 1))} lighter)`);
+        console.log(
+          green(
+            `  ✓ compacted session re-parses cleanly (${compacted.messages.length} messages intact)`,
+          ),
+        );
+        console.log(
+          `  context tokens  ${fmtTok(beforeTok)} → ${fmtTok(nowTok)}  (${fmtPct((beforeTok - nowTok) / (beforeTok || 1))} lighter)`,
+        );
       } catch (e) {
-        console.log(red(`  ! compacted session failed to re-parse: ${e instanceof Error ? e.message : String(e)}`));
-        console.log(red(`    the original is untouched; do not resume from the compacted session.`));
+        console.log(
+          red(
+            `  ! compacted session failed to re-parse: ${e instanceof Error ? e.message : String(e)}`,
+          ),
+        );
+        console.log(
+          red(`    the original is untouched; do not resume from the compacted session.`),
+        );
         return 1;
       }
       nl();
-      console.log(`  ${bold("To try it:")} from this project's directory, run ${green("claude --resume")}`);
-      console.log(`  and pick the newest session (${dim(newSessionId.slice(0, 8))}…). Your original is still there.`);
+      console.log(
+        `  ${bold("To try it:")} from this project's directory, run ${green("claude --resume")}`,
+      );
+      console.log(
+        `  and pick the newest session (${dim(newSessionId.slice(0, 8))}…). Your original is still there.`,
+      );
       nl();
       return 0;
     }
 
     case "bench": {
-      const locator = rest[0] ?? await pickSession(adapter);
+      const locator = rest[0] ?? (await pickSession(adapter));
       if (!locator) {
         console.error("usage: glassbox bench <session.jsonl> [--vs <cleaned.jsonl>]");
         return 2;
@@ -651,36 +806,51 @@ async function main(argv: string[]): Promise<number> {
       }
 
       const tier1Plan = planEviction(report, snapshot, { classes: TIER1_CLASSES });
-      const probeCount = Math.min(tier1Plan.actions.filter((a) => a.originToolCallId).length, MAX_PROBES);
+      const probeCount = Math.min(
+        tier1Plan.actions.filter((a) => a.originToolCallId).length,
+        MAX_PROBES,
+      );
 
-      renderHeader({
-        sessionId: session.id,
-        projectPath: session.projectPath,
-        gitBranch: session.gitBranch,
-        toolVersion: session.toolVersion,
-        startedAt: session.startedAt,
-        endedAt: session.endedAt,
-        messageCount: session.messages.length,
-        turnCount: session.turns.length,
-        toolCallCount: session.toolCalls.length,
-        fileOpCount: session.fileOps.length,
-        memoryOpCount: session.memoryOps.length,
-      }, session.messages.find((m) => m.model)?.model ?? "—");
+      renderHeader(
+        {
+          sessionId: session.id,
+          projectPath: session.projectPath,
+          gitBranch: session.gitBranch,
+          toolVersion: session.toolVersion,
+          startedAt: session.startedAt,
+          endedAt: session.endedAt,
+          messageCount: session.messages.length,
+          turnCount: session.turns.length,
+          toolCallCount: session.toolCalls.length,
+          fileOpCount: session.fileOps.length,
+          memoryOpCount: session.memoryOps.length,
+        },
+        session.messages.find((m) => m.model)?.model ?? "—",
+      );
 
       nl();
       hr("COMPACTION BENCH");
       nl();
       console.log(`  ${bold("Source:")} ${dim(locator)}`);
       if (vsPath) console.log(`  ${bold("Cleaned:")} ${dim(vsPath)}`);
-      console.log(`  ${bold("Context:")} ${fmtTok(tokensBefore)} tok  ·  ${bold(String(tier1Plan.actions.length))} cleaned segments`);
-      console.log(`  ${dim("Generating")} ${bold(String(probeCount))} ${dim(`probe${probeCount === 1 ? "" : "s"} — replaying into both transcripts via ${SUMMARIZE_MODEL_DISPLAY}…`)}`);
+      console.log(
+        `  ${bold("Context:")} ${fmtTok(tokensBefore)} tok  ·  ${bold(String(tier1Plan.actions.length))} cleaned segments`,
+      );
+      console.log(
+        `  ${dim("Generating")} ${bold(String(probeCount))} ${dim(`probe${probeCount === 1 ? "" : "s"} — replaying into both transcripts via ${SUMMARIZE_MODEL_DISPLAY}…`)}`,
+      );
       nl();
 
       let result: BenchResult;
       try {
         result = await runBench(
-          originalRaw, cleanedRaw, session, tier1Plan,
-          tokensBefore, 0, apiKey,
+          originalRaw,
+          cleanedRaw,
+          session,
+          tier1Plan,
+          tokensBefore,
+          0,
+          apiKey,
         );
       } catch (e) {
         console.error(red(`  bench failed: ${e instanceof Error ? e.message : String(e)}`));
@@ -689,15 +859,29 @@ async function main(argv: string[]): Promise<number> {
 
       // ── Per-probe output ──────────────────────────────────────────────────
       for (const r of result.probes) {
-        const icon = r.verdict === "equivalent" ? green("✓") :
-                     r.verdict === "partial"    ? yellow("⚠") : red("✗");
-        const label = r.verdict === "equivalent" ? green("equivalent") :
-                      r.verdict === "partial"    ? yellow("partial")    : red("degraded");
+        const icon =
+          r.verdict === "equivalent"
+            ? green("✓")
+            : r.verdict === "partial"
+              ? yellow("⚠")
+              : red("✗");
+        const label =
+          r.verdict === "equivalent"
+            ? green("equivalent")
+            : r.verdict === "partial"
+              ? yellow("partial")
+              : red("degraded");
 
-        console.log(`  ${icon} ${bold(r.probe.toolName.padEnd(12))} ${dim(`[${r.probe.cleanedDetail}]`)}`);
+        console.log(
+          `  ${icon} ${bold(r.probe.toolName.padEnd(12))} ${dim(`[${r.probe.cleanedDetail}]`)}`,
+        );
         console.log(`    ${dim("Q:")} ${r.probe.question}`);
-        console.log(`    ${dim("original:")}  ${r.originalAnswer.slice(0, 120).replace(/\n/g, " ")}`);
-        console.log(`    ${dim("cleaned:")}   ${r.cleanedAnswer.slice(0, 120).replace(/\n/g, " ")}`);
+        console.log(
+          `    ${dim("original:")}  ${r.originalAnswer.slice(0, 120).replace(/\n/g, " ")}`,
+        );
+        console.log(
+          `    ${dim("cleaned:")}   ${r.cleanedAnswer.slice(0, 120).replace(/\n/g, " ")}`,
+        );
         console.log(`    ${label}  ${dim("—")}  ${r.reason}`);
         nl();
       }
@@ -713,16 +897,17 @@ async function main(argv: string[]): Promise<number> {
       nl();
       console.log(
         `  ${green(String(result.equivalent))} equivalent` +
-        `  ${yellow(String(result.partial))} partial` +
-        `  ${red(String(result.degraded))} degraded` +
-        `  ${dim("/")}  ${result.probes.length} probes`,
+          `  ${yellow(String(result.partial))} partial` +
+          `  ${red(String(result.degraded))} degraded` +
+          `  ${dim("/")}  ${result.probes.length} probes`,
       );
 
-      const overallVerdict = result.degraded > 0
-        ? red("✗  degraded — compaction removed content the model still needed")
-        : result.partial > 0
-          ? yellow("⚠  partial — some detail lost, but no critical information missing")
-          : green("✓  safe — all cleaned content was genuinely garbage");
+      const overallVerdict =
+        result.degraded > 0
+          ? red("✗  degraded — compaction removed content the model still needed")
+          : result.partial > 0
+            ? yellow("⚠  partial — some detail lost, but no critical information missing")
+            : green("✓  safe — all cleaned content was genuinely garbage");
       console.log(`  ${overallVerdict}`);
       nl();
 
@@ -807,7 +992,9 @@ async function main(argv: string[]): Promise<number> {
         for (const f of sync.failed.slice(0, 10)) console.log(`  ! ${f.locator}: ${f.error}`);
 
         if (!(await uiIsBuilt())) {
-          console.log("warning: built UI not found. Run `pnpm --filter @glassbox/ui build` before serving the dashboard.");
+          console.log(
+            "warning: built UI not found. Run `pnpm --filter @glassbox/ui build` before serving the dashboard.",
+          );
         }
 
         const requestedPort = Number(flag(rest, "--port") ?? "4317");
@@ -845,7 +1032,9 @@ async function main(argv: string[]): Promise<number> {
       matches.forEach((r) => {
         const kb = r.sizeBytes ? `${Math.round(r.sizeBytes / 1024)}kb` : "?";
         const project = decodeProjectName(r.locator);
-        console.log(`${r.modifiedAt ?? "????"}  ${kb.padStart(7)}  ${bold(project.padEnd(24))}  ${dim(r.locator)}`);
+        console.log(
+          `${r.modifiedAt ?? "????"}  ${kb.padStart(7)}  ${bold(project.padEnd(24))}  ${dim(r.locator)}`,
+        );
       });
       return 0;
     }
@@ -859,20 +1048,29 @@ async function main(argv: string[]): Promise<number> {
       hr("COMMANDS");
       nl();
       const cmds: [string, string][] = [
-        ["glassbox",                       "index sessions and launch the local web inspector"],
-        ["serve [--port <n>]",             "launch the web inspector (default port 4317)"],
-        ["inspect <session.jsonl>",        "full dashboard: stats + x-ray + cost + reclaimable"],
-        ["xray <session.jsonl>",           "context composition by source + reclaimable tokens"],
-        ["cost <session.jsonl>",           "cost breakdown from provider actuals"],
-        ["clean <session.jsonl>",          "eviction plan of provable garbage; --fork writes a cleaned, lossless session"],
-        ["compact <session.jsonl>",        "tier 0–3: evicts garbage, clears spent outputs, trims cold bulk, summarizes cold reasoning; --fork writes result"],
-        ["bench <session.jsonl>",          "eval compaction quality: replay probes into original + cleaned, judge whether answers degrade"],
-        ["sessions [--project <p>]",       "list indexed sessions (fast, no re-parse)"],
-        ["index [--project <p>]",          "parse + incrementally index sessions into SQLite"],
-        ["watch [--project <p>]",          "index then keep it live on file changes"],
-        ["list [--project <p>]",           "discover Claude Code sessions on disk"],
-        ["search <term>",                  "find sessions by project name or path"],
-        ["parse <session.jsonl>",          "dump the full normalized model as JSON"],
+        ["glassbox", "index sessions and launch the local web inspector"],
+        ["serve [--port <n>]", "launch the web inspector (default port 4317)"],
+        ["inspect <session.jsonl>", "full dashboard: stats + x-ray + cost + reclaimable"],
+        ["xray <session.jsonl>", "context composition by source + reclaimable tokens"],
+        ["cost <session.jsonl>", "cost breakdown from provider actuals"],
+        [
+          "clean <session.jsonl>",
+          "eviction plan of provable garbage; --fork writes a cleaned, lossless session",
+        ],
+        [
+          "compact <session.jsonl>",
+          "tier 0–3: evicts garbage, clears spent outputs, trims cold bulk, summarizes cold reasoning; --fork writes result",
+        ],
+        [
+          "bench <session.jsonl>",
+          "eval compaction quality: replay probes into original + cleaned, judge whether answers degrade",
+        ],
+        ["sessions [--project <p>]", "list indexed sessions (fast, no re-parse)"],
+        ["index [--project <p>]", "parse + incrementally index sessions into SQLite"],
+        ["watch [--project <p>]", "index then keep it live on file changes"],
+        ["list [--project <p>]", "discover Claude Code sessions on disk"],
+        ["search <term>", "find sessions by project name or path"],
+        ["parse <session.jsonl>", "dump the full normalized model as JSON"],
       ];
       const maxCmd = Math.max(...cmds.map(([c]) => c.length));
       for (const [cmd, desc] of cmds) {
@@ -880,7 +1078,7 @@ async function main(argv: string[]): Promise<number> {
         const name = bold(parts[0] ?? "");
         const args = parts.slice(1).join(" ");
         const left = `  ${name}${args ? " " + gray(args) : ""}`;
-        const pad  = " ".repeat(Math.max(1, maxCmd - cmd.length + 4));
+        const pad = " ".repeat(Math.max(1, maxCmd - cmd.length + 4));
         console.log(`${left}${pad}${gray(desc)}`);
       }
       nl();
@@ -905,10 +1103,7 @@ function decodeProjectName(locator: string): string {
 /** Case-insensitive match: term against project name and full locator path. */
 function sessionMatchesFilter(locator: string, term: string): boolean {
   const t = term.toLowerCase();
-  return (
-    decodeProjectName(locator).toLowerCase().includes(t) ||
-    locator.toLowerCase().includes(t)
-  );
+  return decodeProjectName(locator).toLowerCase().includes(t) || locator.toLowerCase().includes(t);
 }
 
 /**
@@ -931,9 +1126,10 @@ async function pickSession(adapter: ClaudeCodeAdapter): Promise<string | undefin
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   try {
     const filterRaw = (await rl.question(gray("  Search sessions (or Enter for all): "))).trim();
-    const filtered = filterRaw === ""
-      ? allSorted
-      : allSorted.filter((r) => sessionMatchesFilter(r.locator, filterRaw));
+    const filtered =
+      filterRaw === ""
+        ? allSorted
+        : allSorted.filter((r) => sessionMatchesFilter(r.locator, filterRaw));
 
     if (filtered.length === 0) {
       console.log(gray(`  no sessions matching "${filterRaw}"`));
@@ -948,10 +1144,14 @@ async function pickSession(adapter: ClaudeCodeAdapter): Promise<string | undefin
     for (let i = 0; i < page.length; i++) {
       const r = page[i]!;
       const projectName = decodeProjectName(r.locator);
-      const date = r.modifiedAt ? r.modifiedAt.slice(0, 16).replace("T", "  ") : "????-??-??  ??:??";
+      const date = r.modifiedAt
+        ? r.modifiedAt.slice(0, 16).replace("T", "  ")
+        : "????-??-??  ??:??";
       const kb = r.sizeBytes ? `${Math.round(r.sizeBytes / 1024)}kb` : "?";
       const num = String(i + 1).padStart(2);
-      console.log(`  ${gray(num)}  ${dim(date)}  ${bold(projectName.padEnd(20))}  ${gray(kb.padStart(7))}`);
+      console.log(
+        `  ${gray(num)}  ${dim(date)}  ${bold(projectName.padEnd(20))}  ${gray(kb.padStart(7))}`,
+      );
     }
     if (filtered.length > 15) {
       console.log(dim(`  … ${filtered.length - 15} more — narrow your search to see them`));
@@ -1023,7 +1223,9 @@ async function startAvailableServer(
       lastError = err;
     }
   }
-  throw lastError instanceof Error ? lastError : new Error(`no available port from ${base} to ${base + 9}`);
+  throw lastError instanceof Error
+    ? lastError
+    : new Error(`no available port from ${base} to ${base + 9}`);
 }
 
 // Set `exitCode` rather than calling `process.exit()`: a parsed session can be

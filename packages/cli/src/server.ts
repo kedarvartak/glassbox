@@ -131,7 +131,15 @@ async function runFork(
   repo: FsRepoState,
   index: SessionIndex,
 ): Promise<
-  | { ok: true; newSessionId: string; outPath: string; copies: number; netReclaimedTokens: number; beforeTokens: number; afterTokens: number }
+  | {
+      ok: true;
+      newSessionId: string;
+      outPath: string;
+      copies: number;
+      netReclaimedTokens: number;
+      beforeTokens: number;
+      afterTokens: number;
+    }
   | { ok: false; error: string }
 > {
   const pricing = pricingFor(session.messages.find((m) => m.model)?.model);
@@ -145,7 +153,8 @@ async function runFork(
   for (const a of eviction.actions) {
     if (a.originToolCallId) evictions.set(a.originToolCallId, a.tombstone);
   }
-  if (evictions.size === 0) return { ok: false, error: "nothing to evict — no provable garbage in this session" };
+  if (evictions.size === 0)
+    return { ok: false, error: "nothing to evict — no provable garbage in this session" };
 
   let raw: string;
   try {
@@ -160,7 +169,10 @@ async function runFork(
   // Safety gate: refuse if the fork introduces a new structural problem.
   const introduced = newProblems(validateTranscript(raw), validateTranscript(text));
   if (introduced.length > 0) {
-    return { ok: false, error: `fork would introduce ${introduced.length} structural problem(s) — refusing to write` };
+    return {
+      ok: false,
+      error: `fork would introduce ${introduced.length} structural problem(s) — refusing to write`,
+    };
   }
 
   const outPath = locator.endsWith(".jsonl")
@@ -173,7 +185,11 @@ async function runFork(
   let afterTokens = snapshot.totalTokens - eviction.netReclaimedTokens;
   try {
     const cleaned = parseClaudeSession(text, { tool: "claude-code", locator: outPath }, tokens);
-    const after = await analyzeSessionReclaimable(cleaned, { repo, tokens, ...(pricing ? { pricing } : {}) });
+    const after = await analyzeSessionReclaimable(cleaned, {
+      repo,
+      tokens,
+      ...(pricing ? { pricing } : {}),
+    });
     afterTokens = after.snapshot.totalTokens;
     const st = await stat(outPath).catch(() => null);
     index.upsert({
@@ -185,7 +201,10 @@ async function runFork(
       },
     });
   } catch (e) {
-    return { ok: false, error: `fork failed to re-parse: ${e instanceof Error ? e.message : String(e)}` };
+    return {
+      ok: false,
+      error: `fork failed to re-parse: ${e instanceof Error ? e.message : String(e)}`,
+    };
   }
 
   return {
@@ -226,24 +245,25 @@ async function buildDetail(session: Session, tokens: TokenCounter, repo: FsRepoS
       compactionCount: session.compactions.length,
       warningCount: session.warnings.length,
     },
-    compaction: session.compactions.length > 0
-      ? {
-          observed: true,
-          count: session.compactions.length,
-          events: session.compactions.map((c) => ({
-            id: c.id,
-            timestamp: c.timestamp,
-            tokensBefore: c.tokensBefore,
-            tokensAfter: c.tokensAfter,
-            evictedMessageCount: c.evictedMessageIds.length,
-            summary: c.summary,
-          })),
-        }
-      : {
-          observed: false,
-          count: 0,
-          note: "No compaction marker was observed in this session. Claude Code compaction diff is represented as an explicit limitation until a compacted fixture proves the schema.",
-        },
+    compaction:
+      session.compactions.length > 0
+        ? {
+            observed: true,
+            count: session.compactions.length,
+            events: session.compactions.map((c) => ({
+              id: c.id,
+              timestamp: c.timestamp,
+              tokensBefore: c.tokensBefore,
+              tokensAfter: c.tokensAfter,
+              evictedMessageCount: c.evictedMessageIds.length,
+              summary: c.summary,
+            })),
+          }
+        : {
+            observed: false,
+            count: 0,
+            note: "No compaction marker was observed in this session. Claude Code compaction diff is represented as an explicit limitation until a compacted fixture proves the schema.",
+          },
     cost: {
       totalUsd: cost.totalUsd,
       breakdown: {

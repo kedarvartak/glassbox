@@ -1,8 +1,4 @@
-import type {
-  ContextSnapshot,
-  MessageId,
-  Session,
-} from "@glassbox/core";
+import type { ContextSnapshot, MessageId, Session } from "@glassbox/core";
 
 /**
  * Tier 3 planner — guided summarization of cold reasoning prose.
@@ -66,9 +62,7 @@ export function planSummarize(
 
   // Cold prefix: all message IDs not in the working set.
   const coldMessageIds = new Set<MessageId>(
-    session.messages
-      .filter((m) => !workingSetIds.has(m.id))
-      .map((m) => m.id),
+    session.messages.filter((m) => !workingSetIds.has(m.id)).map((m) => m.id),
   );
 
   // Count cold reasoning tokens (assistant + thinking — what the LLM compresses).
@@ -108,7 +102,7 @@ export function buildArtifactLedger(
   if (coldFileOps.length > 0) {
     lines.push("Files touched:");
     // Dedupe by path, keeping the last op per path (most recent state).
-    const byPath = new Map<string, typeof coldFileOps[0]>();
+    const byPath = new Map<string, (typeof coldFileOps)[0]>();
     for (const op of coldFileOps) byPath.set(op.path, op);
     for (const op of byPath.values()) {
       lines.push(`  ${op.kind.padEnd(6)}  ${op.path}`);
@@ -119,9 +113,7 @@ export function buildArtifactLedger(
   // Tool calls in the cold prefix (non-file tools — the interesting actions).
   const fileToolNames = new Set(["Read", "Write", "Edit", "MultiEdit"]);
   const coldToolCalls = session.toolCalls.filter(
-    (tc) =>
-      coldMessageIds.has(tc.requestedInMessageId) &&
-      !fileToolNames.has(tc.name),
+    (tc) => coldMessageIds.has(tc.requestedInMessageId) && !fileToolNames.has(tc.name),
   );
   if (coldToolCalls.length > 0) {
     lines.push("Tool calls:");

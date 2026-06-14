@@ -119,7 +119,12 @@ class FsFakeAdapter implements Adapter {
     for (const n of names) {
       const p = join(this.dir, n);
       const st = await stat(p);
-      refs.push({ tool: this.tool, locator: p, modifiedAt: st.mtime.toISOString(), sizeBytes: st.size });
+      refs.push({
+        tool: this.tool,
+        locator: p,
+        modifiedAt: st.mtime.toISOString(),
+        sizeBytes: st.size,
+      });
     }
     return refs;
   }

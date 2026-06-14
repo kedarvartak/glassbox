@@ -28,14 +28,14 @@ GLASSBOX_DEMO_SESSION="$(glassbox list | head -1 | awk '{print $3}')" \
 
 ## Tapes
 
-| Tape | Produces | Feature |
-|---|---|---|
-| `inspect.tape` | `inspect.gif` | Full session dashboard — stats, x-ray, cost, reclaimable |
-| `xray.tape` | `xray.gif` | Context composition by source + reclaimable taxonomy |
-| `clean.tape` | `clean.gif` | The cleaner: dry-run plan, `--apply` to CLAUDE.md, `--compact` |
-| `cost.tape` | `cost.gif` | Cost from provider actuals, cache-read recarry broken out |
-| `fleet.tape` | `fleet.gif` | `index` / `sessions` / `watch` across all projects |
-| `serve.tape` | `serve.gif` | Launching the local web inspector |
+| Tape           | Produces      | Feature                                                        |
+| -------------- | ------------- | -------------------------------------------------------------- |
+| `inspect.tape` | `inspect.gif` | Full session dashboard — stats, x-ray, cost, reclaimable       |
+| `xray.tape`    | `xray.gif`    | Context composition by source + reclaimable taxonomy           |
+| `clean.tape`   | `clean.gif`   | The cleaner: dry-run plan, `--apply` to CLAUDE.md, `--compact` |
+| `cost.tape`    | `cost.gif`    | Cost from provider actuals, cache-read recarry broken out      |
+| `fleet.tape`   | `fleet.gif`   | `index` / `sessions` / `watch` across all projects             |
+| `serve.tape`   | `serve.gif`   | Launching the local web inspector                              |
 
 Each tape is self-contained and pins font, theme, and window size so all GIFs
 look consistent.

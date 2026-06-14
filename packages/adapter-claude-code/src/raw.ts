@@ -106,11 +106,7 @@ export interface RawOtherEvent {
   readonly [k: string]: unknown;
 }
 
-export type RawEvent =
-  | RawMessageEvent
-  | RawSystemEvent
-  | RawAttachmentEvent
-  | RawOtherEvent;
+export type RawEvent = RawMessageEvent | RawSystemEvent | RawAttachmentEvent | RawOtherEvent;
 
 /** True for the event types that become {@link import("@glassbox/core").Message}s. */
 export function isTreeEvent(

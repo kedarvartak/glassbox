@@ -30,16 +30,17 @@ export interface ComposeResult {
  * transcript. This is the raw input to the summarizer — it sees only the cold
  * reasoning, never the working set or garbage (already cleared by Tier 0/1).
  */
-export function extractColdText(
-  rawText: string,
-  coldMessageIds: ReadonlySet<string>,
-): string {
+export function extractColdText(rawText: string, coldMessageIds: ReadonlySet<string>): string {
   const parts: string[] = [];
 
   for (const line of rawText.split("\n")) {
     if (line.trim() === "") continue;
     let ev: unknown;
-    try { ev = JSON.parse(line); } catch { continue; }
+    try {
+      ev = JSON.parse(line);
+    } catch {
+      continue;
+    }
 
     const event = ev as Record<string, unknown>;
     if (event["type"] !== "assistant") continue;
@@ -87,8 +88,13 @@ export function composeCompactedTranscript(
     if (line.trim() === "") continue;
     try {
       const ev = JSON.parse(line) as Record<string, unknown>;
-      if (ev["uuid"] === boundaryMessageId) { boundaryIdx = i; break; }
-    } catch { continue; }
+      if (ev["uuid"] === boundaryMessageId) {
+        boundaryIdx = i;
+        break;
+      }
+    } catch {
+      continue;
+    }
   }
 
   if (boundaryIdx === -1) {
@@ -121,10 +127,18 @@ export function composeCompactedTranscript(
       if (i >= boundaryIdx) out.push(line);
       continue;
     }
-    if (i < boundaryIdx) { droppedLines++; continue; }
+    if (i < boundaryIdx) {
+      droppedLines++;
+      continue;
+    }
 
     let ev: unknown;
-    try { ev = JSON.parse(line); } catch { out.push(line); continue; }
+    try {
+      ev = JSON.parse(line);
+    } catch {
+      out.push(line);
+      continue;
+    }
 
     const event = ev as Record<string, unknown>;
 

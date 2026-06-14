@@ -58,13 +58,26 @@ describe("reconstructContext", () => {
     ts = 0;
     const messages = [
       message("user", [{ kind: "text", text: "please add a helper" }], "u1"),
-      message("assistant", [
-        { kind: "thinking", text: "I will read the file first" },
-        { kind: "tool_use", toolCallId: asToolCallId("tc-read"), name: "Read", input: {} },
-      ], "a1"),
-      message("user", [
-        { kind: "tool_result", toolCallId: asToolCallId("tc-read"), isError: false, text: "file body" },
-      ], "u2"),
+      message(
+        "assistant",
+        [
+          { kind: "thinking", text: "I will read the file first" },
+          { kind: "tool_use", toolCallId: asToolCallId("tc-read"), name: "Read", input: {} },
+        ],
+        "a1",
+      ),
+      message(
+        "user",
+        [
+          {
+            kind: "tool_result",
+            toolCallId: asToolCallId("tc-read"),
+            isError: false,
+            text: "file body",
+          },
+        ],
+        "u2",
+      ),
       message("assistant", [{ kind: "text", text: "done, looks good now" }], "a2"),
     ];
     const fileOps: FileOp[] = [
@@ -148,7 +161,10 @@ describe("reconstructContext", () => {
       message("user", [{ kind: "text", text: "first turn prompt" }], "u1"),
       message("assistant", [{ kind: "text", text: "second turn reply" }], "a1"),
     ];
-    const snap = reconstructContext(sessionOf(messages), { tokens, atMessageId: asMessageId("u1") });
+    const snap = reconstructContext(sessionOf(messages), {
+      tokens,
+      atMessageId: asMessageId("u1"),
+    });
     expect(snap.atMessageId).toBe("u1");
     expect(composition(snap).map((c) => c.source)).toEqual(["user"]); // a1 excluded
   });
