@@ -21,7 +21,7 @@ import {
   TIER1_CLASSES,
 } from "@glassbox/analysis";
 import { callSummarizer, SummarizerError } from "./summarize.js";
-import { runBench, generateProbes, extractApiMessages, MAX_PROBES, type BenchResult } from "./bench.js";
+import { runBench, MAX_PROBES, type BenchResult } from "./bench.js";
 
 const SUMMARIZE_MODEL_DISPLAY = "claude-haiku-4-5";
 
@@ -631,7 +631,7 @@ async function main(argv: string[]): Promise<number> {
       // Either use a provided cleaned fork or produce one in-memory.
       const vsPath = flag(rest, "--vs");
       let cleanedRaw: string;
-      let tokensBefore = snapshot.totalTokens;
+      const tokensBefore = snapshot.totalTokens;
 
       if (vsPath) {
         cleanedRaw = safeRead(vsPath);
