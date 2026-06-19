@@ -4,7 +4,6 @@
     <span style="background: #007AFF; color: white; padding: 6px 12px; border-radius: 16px; margin: 4px; display: inline-block; font-size: 13px; font-weight: 600;">Local-first</span>
     <span style="background: #312ECB; color: white; padding: 6px 12px; border-radius: 16px; margin: 4px; display: inline-block; font-size: 13px; font-weight: 600;">Read-only</span>
     <span style="background: #34C759; color: white; padding: 6px 12px; border-radius: 16px; margin: 4px; display: inline-block; font-size: 13px; font-weight: 600;">Lossless Fork</span>
-    <span style="background: #FF9500; color: white; padding: 6px 12px; border-radius: 16px; margin: 4px; display: inline-block; font-size: 13px; font-weight: 600;">Web Inspector</span>
   </p>
 </div>
 
@@ -115,15 +114,15 @@ printf '#!/usr/bin/env bash\nexec node %s/packages/cli/dist/main.js "$@"\n' "$PW
 
 ## Commands
 
-| Command                       | What it does                                        |
-| ----------------------------- | --------------------------------------------------- |
+| Command                       | What it does                                          |
+| ----------------------------- | ----------------------------------------------------- |
 | `glassbox inspect <s>`        | full terminal report: stats, x-ray, cost, reclaimable |
-| `glassbox xray <s>`           | window composition by source and reclaimable tokens |
-| `glassbox cost <s>`           | cost breakdown from provider actuals                |
-| `glassbox clean <s> [--fork]` | eviction plan; `--fork` writes a cleaned session    |
-| `glassbox sessions`           | list indexed sessions                               |
-| `glassbox index` / `watch`    | build or live-update the index                      |
-| `glassbox list` / `parse <s>` | discover sessions; dump the parsed model            |
+| `glassbox xray <s>`           | window composition by source and reclaimable tokens   |
+| `glassbox cost <s>`           | cost breakdown from provider actuals                  |
+| `glassbox clean <s> [--fork]` | eviction plan; `--fork` writes a cleaned session      |
+| `glassbox sessions`           | list indexed sessions                                 |
+| `glassbox index` / `watch`    | build or live-update the index                        |
+| `glassbox list` / `parse <s>` | discover sessions; dump the parsed model              |
 
 ## Safety
 
