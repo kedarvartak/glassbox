@@ -26,8 +26,5 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build TypeScript packages
-        run: pnpm build:ts
-
-      - name: Build UI
-        run: pnpm build:ui
+      - name: Build
+        run: pnpm build

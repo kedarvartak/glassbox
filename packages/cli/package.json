@@ -1,32 +1,44 @@
 {
-  "name": "@glassbox/cli",
-  "version": "0.0.0",
-  "description": "The `glassbox` command — discovers sessions and runs analyzers from the terminal. The first surface; the local web UI comes in Phase 2.",
+  "name": "glassbox",
+  "version": "0.1.0",
+  "description": "X-ray and hygiene monitor for Claude Code AI agent sessions — see what's in your context window, reclaim garbage, compact intelligently.",
   "type": "module",
   "bin": {
     "glassbox": "./dist/main.js"
   },
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
-    }
-  },
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
   "files": [
-    "dist",
-    "src"
+    "dist"
   ],
   "scripts": {
-    "build": "tsc --build",
-    "clean": "tsc --build --clean"
+    "build": "tsup",
+    "build:types": "tsc --build",
+    "clean": "rm -rf dist"
   },
+  "engines": {
+    "node": ">=22"
+  },
+  "keywords": [
+    "claude",
+    "claude-code",
+    "ai",
+    "context-window",
+    "llm",
+    "agent",
+    "compaction"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kedarvartak/glassbox.git"
+  },
+  "homepage": "https://github.com/kedarvartak/glassbox#readme",
   "dependencies": {
     "@glassbox/adapter-claude-code": "workspace:*",
     "@glassbox/analysis": "workspace:*",
     "@glassbox/core": "workspace:*",
-    "@glassbox/store": "workspace:*",
-    "@glassbox/ui": "workspace:*"
+    "@glassbox/store": "workspace:*"
+  },
+  "devDependencies": {
+    "tsup": "^8.5.1"
   }
 }

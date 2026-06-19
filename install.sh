@@ -100,5 +100,4 @@ echo "     $(bold 'glassbox list')                      # find your Claude Code 
 echo "     $(bold 'glassbox inspect') <session.jsonl>   # x-ray, cost, reclaimable"
 echo "     $(bold 'glassbox clean')   <session.jsonl>   # dry-run eviction plan"
 echo "     $(bold 'glassbox clean')   <session.jsonl> $(dim '--fork')  # write a cleaned session"
-echo "     $(bold 'glassbox serve')                     # open the web dashboard"
 echo ""

@@ -4,7 +4,6 @@
     <span style="background: #007AFF; color: white; padding: 6px 12px; border-radius: 16px; margin: 4px; display: inline-block; font-size: 13px; font-weight: 600;">Local-first</span>
     <span style="background: #312ECB; color: white; padding: 6px 12px; border-radius: 16px; margin: 4px; display: inline-block; font-size: 13px; font-weight: 600;">Read-only</span>
     <span style="background: #34C759; color: white; padding: 6px 12px; border-radius: 16px; margin: 4px; display: inline-block; font-size: 13px; font-weight: 600;">Lossless Fork</span>
-    <span style="background: #FF9500; color: white; padding: 6px 12px; border-radius: 16px; margin: 4px; display: inline-block; font-size: 13px; font-weight: 600;">Web Inspector</span>
   </p>
 </div>
 
@@ -113,45 +112,23 @@ printf '#!/usr/bin/env bash\nexec node %s/packages/cli/dist/main.js "$@"\n' "$PW
   <img src="assets/demos/clean.gif" alt="glassbox clean --fork — the lossless cleaner" width="900">
 </p>
 
-## The web inspector
-
-```
-glassbox serve     # local dashboard at 127.0.0.1:4317
-```
-
-Open a session to read its x-ray and cost, and click RUN FORK in the Context
-Cleaner panel to write a cleaned session from the browser. The dashboard then
-switches to the cleaned session so you can see the result.
-
-The example below is one real session before and after a fork. The window drops
-from 146.5k to 79.7k tokens (46% lighter) and reclaimable falls from 65% to 35%,
-while cost and history stay exactly the same — nothing was summarized.
-
-<p align="center">
-  <img src="assets/screenshots/dashboard-before.png" alt="dashboard before the fork — 65% reclaimable, 146.5k tokens" width="900">
-</p>
-<p align="center">
-  <img src="assets/screenshots/dashboard-after.png" alt="dashboard after the fork — 35% reclaimable, 79.7k tokens" width="900">
-</p>
-
 ## Commands
 
-| Command                       | What it does                                        |
-| ----------------------------- | --------------------------------------------------- |
-| `glassbox serve`              | index sessions and open the web inspector           |
-| `glassbox inspect <s>`        | full dashboard: stats, x-ray, cost, reclaimable     |
-| `glassbox xray <s>`           | window composition by source and reclaimable tokens |
-| `glassbox cost <s>`           | cost breakdown from provider actuals                |
-| `glassbox clean <s> [--fork]` | eviction plan; `--fork` writes a cleaned session    |
-| `glassbox sessions`           | list indexed sessions                               |
-| `glassbox index` / `watch`    | build or live-update the index                      |
-| `glassbox list` / `parse <s>` | discover sessions; dump the parsed model            |
+| Command                       | What it does                                          |
+| ----------------------------- | ----------------------------------------------------- |
+| `glassbox inspect <s>`        | full terminal report: stats, x-ray, cost, reclaimable |
+| `glassbox xray <s>`           | window composition by source and reclaimable tokens   |
+| `glassbox cost <s>`           | cost breakdown from provider actuals                  |
+| `glassbox clean <s> [--fork]` | eviction plan; `--fork` writes a cleaned session      |
+| `glassbox sessions`           | list indexed sessions                                 |
+| `glassbox index` / `watch`    | build or live-update the index                        |
+| `glassbox list` / `parse <s>` | discover sessions; dump the parsed model              |
 
 ## Safety
 
-Glassbox is local-first and bound to 127.0.0.1. It never modifies your
-transcripts: the only thing it writes is a new sibling session, and it validates
-that the cleaned copy preserves every structural invariant before writing one.
+Glassbox is local-first. It never modifies your transcripts: the only thing it
+writes is a new sibling session, and it validates that the cleaned copy
+preserves every structural invariant before writing one.
 
 ## Documentation
 
@@ -166,6 +143,5 @@ packages/core               tool-neutral model
 packages/adapter-claude-code parse, fork, validate Claude Code transcripts
 packages/analysis           detection, eviction planning, cost
 packages/store              SQLite session index
-packages/cli                glassbox command and web server
-packages/ui                 React dashboard
+packages/cli                glassbox command
 ```

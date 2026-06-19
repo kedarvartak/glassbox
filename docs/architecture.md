@@ -21,9 +21,7 @@ Claude Code format; only the CLI does filesystem writes.
   never writes.
 - **store** — a SQLite index of parsed sessions for fast listing, plus a watcher.
 - **cli** — the `glassbox` command. Dispatches subcommands, renders ANSI output,
-  performs all filesystem writes, and hosts the local web server.
-- **ui** — the React dashboard served by the CLI. It is a thin view over the same
-  analysis functions the CLI uses, so terminal and browser agree by construction.
+  and performs all filesystem writes.
 
 ## The pipeline
 
@@ -72,10 +70,3 @@ Before writing, `validateTranscript` runs on both the original and the fork and 
 fork is rejected if it introduces any new problem (orphaned pairs, dangling
 `parentUuid`, empty content, invalid JSON). After writing, the fork is re-parsed as
 a final proof that it loads.
-
-## Server
-
-`glassbox serve` exposes the analyses as JSON and serves the built UI, bound to
-127.0.0.1. Two read endpoints, `GET /api/sessions` and `GET /api/session`, and one
-write endpoint, `POST /api/fork`, which runs the same fork path as the CLI and only
-ever creates a new sibling file.
