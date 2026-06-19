@@ -45,7 +45,6 @@ function buildPreambleContent(originalSessionId: string, ledger: string, digest:
   ].join("\n");
 }
 import { SessionIndex, SessionIndexer } from "@glassbox/store";
-import { startServer, uiIsBuilt } from "./server.js";
 import { EstimateTokenCounter } from "./token-counter.js";
 import {
   bold,
@@ -978,43 +977,6 @@ async function main(argv: string[]): Promise<number> {
       return 0;
     }
 
-    case undefined:
-    case "serve": {
-      const index = SessionIndex.open(openDbPath(flag(rest, "--db")));
-      try {
-        const indexer = new SessionIndexer(adapter, index);
-        const projectPath = flag(rest, "--project");
-        const sync = await indexer.sync(projectPath ? { projectPath } : {});
-        console.log(
-          `indexed: scanned ${sync.scanned}, parsed ${sync.parsed}, unchanged ${sync.unchanged}, ` +
-            `removed ${sync.removed}, failed ${sync.failed.length}  (${index.stats().sessions} total)`,
-        );
-        for (const f of sync.failed.slice(0, 10)) console.log(`  ! ${f.locator}: ${f.error}`);
-
-        if (!(await uiIsBuilt())) {
-          console.log(
-            "warning: built UI not found. Run `pnpm --filter @glassbox/ui build` before serving the dashboard.",
-          );
-        }
-
-        const requestedPort = Number(flag(rest, "--port") ?? "4317");
-        const host = flag(rest, "--host") ?? "127.0.0.1";
-        const server = await startAvailableServer(index, tokens, requestedPort, host);
-        console.log(`Glassbox inspector: ${server.url}`);
-        console.log("local-only, read-only. Press Ctrl-C to stop.");
-        await new Promise<void>((resolve) => {
-          process.once("SIGINT", () => {
-            server.close();
-            console.log("\nstopped.");
-            resolve();
-          });
-        });
-      } finally {
-        index.close();
-      }
-      return 0;
-    }
-
     case "search": {
       const term = rest[0];
       if (!term) {
@@ -1039,6 +1001,7 @@ async function main(argv: string[]): Promise<number> {
       return 0;
     }
 
+    case undefined:
     case "help":
     case "--help":
     case "-h": {
@@ -1048,8 +1011,6 @@ async function main(argv: string[]): Promise<number> {
       hr("COMMANDS");
       nl();
       const cmds: [string, string][] = [
-        ["glassbox", "index sessions and launch the local web inspector"],
-        ["serve [--port <n>]", "launch the web inspector (default port 4317)"],
         ["inspect <session.jsonl>", "full dashboard: stats + x-ray + cost + reclaimable"],
         ["xray <session.jsonl>", "context composition by source + reclaimable tokens"],
         ["cost <session.jsonl>", "cost breakdown from provider actuals"],
@@ -1204,28 +1165,6 @@ function openDbPath(override: string | undefined): string {
   const path = override ?? join(homedir(), ".glassbox", "index.db");
   mkdirSync(dirname(path), { recursive: true });
   return path;
-}
-
-async function startAvailableServer(
-  index: SessionIndex,
-  tokens: EstimateTokenCounter,
-  requestedPort: number,
-  host: string,
-): Promise<{ url: string; close: () => void }> {
-  const base = Number.isFinite(requestedPort) ? requestedPort : 4317;
-  let lastError: unknown;
-  for (let port = base; port < base + 10; port++) {
-    try {
-      return await startServer({ index, tokens, port, host });
-    } catch (err: unknown) {
-      const code = (err as { code?: string }).code;
-      if (code !== "EADDRINUSE") throw err;
-      lastError = err;
-    }
-  }
-  throw lastError instanceof Error
-    ? lastError
-    : new Error(`no available port from ${base} to ${base + 9}`);
 }
 
 // Set `exitCode` rather than calling `process.exit()`: a parsed session can be

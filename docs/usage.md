@@ -27,9 +27,9 @@ glassbox list
 glassbox inspect ~/.claude/projects/<project>/<session>.jsonl
 ```
 
-`inspect` prints the full dashboard: stats, context x-ray, cost, and reclaimable
-tokens. `xray` shows just the window composition and garbage; `cost` shows spend
-from provider actuals.
+`inspect` prints the full terminal report: stats, context x-ray, cost, and
+reclaimable tokens. `xray` shows just the window composition and garbage; `cost`
+shows spend from provider actuals.
 
 ## Clean a session
 
@@ -57,18 +57,6 @@ claude --resume        # pick the newest session
 
 Your original session is untouched and still resumable. Add `--yes` to skip the
 confirmation, `--json` to get the plan as JSON.
-
-## The web inspector
-
-`serve` indexes your sessions and opens a local dashboard at 127.0.0.1:4317.
-
-```
-glassbox serve
-```
-
-Open a session, read its x-ray and cost, and click RUN FORK in the Context Cleaner
-panel to write a cleaned session without leaving the browser. The button calls the
-same fork path as the CLI.
 
 ## Keeping the index fresh
 

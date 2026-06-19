@@ -29,9 +29,6 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build UI
-        run: pnpm build:ui
-
       - name: Bundle CLI
         run: pnpm --filter glassbox build
 
