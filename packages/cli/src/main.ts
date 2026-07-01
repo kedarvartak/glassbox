@@ -4,6 +4,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createInterface } from "node:readline/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import type { Session } from "@glassbox/core";
 import {
   ClaudeCodeAdapter,
   claudeProjectsRoot,
@@ -66,15 +67,33 @@ import {
   renderReclaimable,
   renderSessions,
   renderEvictionPlan,
+  type SessionMeta,
 } from "./render.js";
 
-/**
- * `glassbox` entry point. Hand-rolled dispatch (no arg-parsing dep) keeps the
- * skeleton lean; we add a real command framework if/when subcommands multiply.
- *
- * Working today: `list` (discovery). `parse` is wired to the adapter but the
- * parser itself is the Phase-1 build (it currently throws a clear NotImplemented).
- */
+function modelFromSession(session: Session): string {
+  return session.messages.find((message) => message.model)?.model ?? "—";
+}
+
+function sessionMeta(session: Session): SessionMeta {
+  return {
+    sessionId: session.id,
+    projectPath: session.projectPath,
+    gitBranch: session.gitBranch,
+    toolVersion: session.toolVersion,
+    startedAt: session.startedAt,
+    endedAt: session.endedAt,
+    messageCount: session.messages.length,
+    turnCount: session.turns.length,
+    toolCallCount: session.toolCalls.length,
+    fileOpCount: session.fileOps.length,
+    memoryOpCount: session.memoryOps.length,
+  };
+}
+
+function renderSessionHeader(session: Session, model = modelFromSession(session)): void {
+  renderHeader(sessionMeta(session), model);
+}
+
 async function main(argv: string[]): Promise<number> {
   const [command, ...rest] = argv;
   const tokens = new EstimateTokenCounter();
@@ -118,22 +137,7 @@ async function main(argv: string[]): Promise<number> {
       const cost = analyzeSessionCost(session);
       const model = session.messages.find((m) => m.model)?.model ?? "—";
 
-      renderHeader(
-        {
-          sessionId: session.id,
-          projectPath: session.projectPath,
-          gitBranch: session.gitBranch,
-          toolVersion: session.toolVersion,
-          startedAt: session.startedAt,
-          endedAt: session.endedAt,
-          messageCount: session.messages.length,
-          turnCount: session.turns.length,
-          toolCallCount: session.toolCalls.length,
-          fileOpCount: session.fileOps.length,
-          memoryOpCount: session.memoryOps.length,
-        },
-        model,
-      );
+      renderSessionHeader(session, model);
 
       renderCost({
         totalUsd: cost.totalUsd,
@@ -162,22 +166,7 @@ async function main(argv: string[]): Promise<number> {
         ...(pricing ? { pricing } : {}),
       });
 
-      renderHeader(
-        {
-          sessionId: session.id,
-          projectPath: session.projectPath,
-          gitBranch: session.gitBranch,
-          toolVersion: session.toolVersion,
-          startedAt: session.startedAt,
-          endedAt: session.endedAt,
-          messageCount: session.messages.length,
-          turnCount: session.turns.length,
-          toolCallCount: session.toolCalls.length,
-          fileOpCount: session.fileOps.length,
-          memoryOpCount: session.memoryOps.length,
-        },
-        model,
-      );
+      renderSessionHeader(session, model);
 
       renderXray(composition(snapshot), snapshot.totalTokens);
       renderReclaimable(
@@ -209,22 +198,7 @@ async function main(argv: string[]): Promise<number> {
         ...(pricing ? { pricing } : {}),
       });
 
-      renderHeader(
-        {
-          sessionId: session.id,
-          projectPath: session.projectPath,
-          gitBranch: session.gitBranch,
-          toolVersion: session.toolVersion,
-          startedAt: session.startedAt,
-          endedAt: session.endedAt,
-          messageCount: session.messages.length,
-          turnCount: session.turns.length,
-          toolCallCount: session.toolCalls.length,
-          fileOpCount: session.fileOps.length,
-          memoryOpCount: session.memoryOps.length,
-        },
-        model,
-      );
+      renderSessionHeader(session, model);
 
       renderStats([
         { label: "session cost", value: fmtUsd(cost.totalUsd), sub: "actuals · exact" },
@@ -292,22 +266,7 @@ async function main(argv: string[]): Promise<number> {
       const doFork = rest.includes("--fork");
       const assumeYes = rest.includes("--yes") || rest.includes("-y");
 
-      renderHeader(
-        {
-          sessionId: session.id,
-          projectPath: session.projectPath,
-          gitBranch: session.gitBranch,
-          toolVersion: session.toolVersion,
-          startedAt: session.startedAt,
-          endedAt: session.endedAt,
-          messageCount: session.messages.length,
-          turnCount: session.turns.length,
-          toolCallCount: session.toolCalls.length,
-          fileOpCount: session.fileOps.length,
-          memoryOpCount: session.memoryOps.length,
-        },
-        model,
-      );
+      renderSessionHeader(session, model);
 
       renderEvictionPlan(eviction, { dryRun: !doFork });
 
@@ -456,22 +415,7 @@ async function main(argv: string[]): Promise<number> {
       const doFork = rest.includes("--fork");
       const assumeYes = rest.includes("--yes") || rest.includes("-y");
 
-      renderHeader(
-        {
-          sessionId: session.id,
-          projectPath: session.projectPath,
-          gitBranch: session.gitBranch,
-          toolVersion: session.toolVersion,
-          startedAt: session.startedAt,
-          endedAt: session.endedAt,
-          messageCount: session.messages.length,
-          turnCount: session.turns.length,
-          toolCallCount: session.toolCalls.length,
-          fileOpCount: session.fileOps.length,
-          memoryOpCount: session.memoryOps.length,
-        },
-        model,
-      );
+      renderSessionHeader(session, model);
 
       // Tier 0: provable garbage (lossless)
       const tier0 = planEviction(report, snapshot, { classes: PROVABLE_CLASSES });
@@ -810,22 +754,7 @@ async function main(argv: string[]): Promise<number> {
         MAX_PROBES,
       );
 
-      renderHeader(
-        {
-          sessionId: session.id,
-          projectPath: session.projectPath,
-          gitBranch: session.gitBranch,
-          toolVersion: session.toolVersion,
-          startedAt: session.startedAt,
-          endedAt: session.endedAt,
-          messageCount: session.messages.length,
-          turnCount: session.turns.length,
-          toolCallCount: session.toolCalls.length,
-          fileOpCount: session.fileOps.length,
-          memoryOpCount: session.memoryOps.length,
-        },
-        session.messages.find((m) => m.model)?.model ?? "—",
-      );
+      renderSessionHeader(session, modelFromSession(session));
 
       nl();
       hr("COMPACTION BENCH");

@@ -13,3 +13,7 @@ Format entries under version or date headings and use sections such as `Added`, 
 - Added baseline `DOC.md` app documentation.
 - Added this mandatory `CHANGELOG.md`.
 - Added a GitHub pull request template with documentation, changelog, quality, and validation checklists.
+
+### Changed
+
+- Refactored repeated CLI session-header metadata construction into shared helpers.
