@@ -17,10 +17,8 @@ import {
 import {
   analyzeSessionCost,
   analyzeSessionReclaimable,
-  checkTokenAccuracy,
   composition,
   FsRepoState,
-  PRICING_AS_OF,
   planEviction,
   planTrim,
   planSummarize,
@@ -180,16 +178,13 @@ async function main(argv: string[]): Promise<number> {
       );
 
       renderXray(composition(snapshot), snapshot.totalTokens);
-      renderReclaimable(
-        {
-          reclaimableTokens: report.reclaimableTokens,
-          reclaimablePct: report.reclaimablePct,
-          wastedUsdPerTurn: report.wastedUsdPerTurn,
-          byStatus: report.byStatus as Record<string, number>,
-          items: report.items.slice(0, 12),
-        },
-        snapshot.totalTokens,
-      );
+      renderReclaimable({
+        reclaimableTokens: report.reclaimableTokens,
+        reclaimablePct: report.reclaimablePct,
+        wastedUsdPerTurn: report.wastedUsdPerTurn,
+        byStatus: report.byStatus as Record<string, number>,
+        items: report.items.slice(0, 12),
+      });
       return 0;
     }
 
@@ -255,16 +250,13 @@ async function main(argv: string[]): Promise<number> {
         cacheSavingsUsd: cost.cacheSavingsUsd,
         unpricedMessages: cost.unpricedMessages,
       });
-      renderReclaimable(
-        {
-          reclaimableTokens: report.reclaimableTokens,
-          reclaimablePct: report.reclaimablePct,
-          wastedUsdPerTurn: report.wastedUsdPerTurn,
-          byStatus: report.byStatus as Record<string, number>,
-          items: report.items.slice(0, 12),
-        },
-        snapshot.totalTokens,
-      );
+      renderReclaimable({
+        reclaimableTokens: report.reclaimableTokens,
+        reclaimablePct: report.reclaimablePct,
+        wastedUsdPerTurn: report.wastedUsdPerTurn,
+        byStatus: report.byStatus as Record<string, number>,
+        items: report.items.slice(0, 12),
+      });
       return 0;
     }
 
