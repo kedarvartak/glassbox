@@ -135,6 +135,7 @@ preserves every structural invariant before writing one.
 - [docs/idea.md](docs/idea.md) — the problem and the approach.
 - [docs/architecture.md](docs/architecture.md) — packages, pipeline, and the fork.
 - [docs/usage.md](docs/usage.md) — full command and workflow reference.
+- [docs/interceptor.md](docs/interceptor.md) — the harness-agnostic live proxy design.
 
 ## Repository layout
 
