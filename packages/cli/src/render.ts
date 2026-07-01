@@ -272,7 +272,7 @@ export interface ReclaimableReport {
   items: { status: string; label: string; reason: string; tokens: number }[];
 }
 
-export function renderReclaimable(r: ReclaimableReport, totalTokens: number): void {
+export function renderReclaimable(r: ReclaimableReport): void {
   hr("RECLAIMABLE CONTEXT");
   nl();
 
