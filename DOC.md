@@ -31,6 +31,7 @@ pnpm clean       # Clean TypeScript build output
 - `assets/` — project assets.
 - `agent-docs/` — mandatory coding-agent guidelines.
 - `AGENTS.md` — root instruction file binding agents to the guidelines.
+- `.github/pull_request_template.md` — pull request checklist for docs, changelog, validation, and review notes.
 
 ## Documentation requirements
 
